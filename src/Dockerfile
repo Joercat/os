@@ -17,7 +17,7 @@ RUN gcc -c hardware.c -o hardware.o
 RUN g++ main.cpp boot.o hardware.o -o phone_os
 
 # Final stage
-FROM debian:slim
+FROM debian:bullseye-slim
 
 WORKDIR /app
 COPY --from=builder /app/phone_os .
