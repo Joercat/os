@@ -1,29 +1,40 @@
-# Multi-stage build for optimal size
+# Build environment
 FROM gcc:latest as builder
 
-WORKDIR /app
+WORKDIR /os
 COPY . .
 
-# Install NASM assembler
-RUN apt-get update && apt-get install -y nasm
+# Install required tools
+RUN apt-get update && \
+    apt-get install -y nasm xorriso grub-pc-bin grub-common
 
-# Compile assembly
+# Compile assembly bootloader
 RUN nasm -f elf64 boot.asm -o boot.o
 
-# Compile C file
-RUN gcc -c hardware.c -o hardware.o
+# Compile hardware interface
+RUN gcc -c -ffreestanding -fno-stack-protector -fno-pie hardware.c -o hardware.o
 
-# Compile C++ and link everything
-RUN g++ main.cpp boot.o hardware.o -o phone_os
+# Compile kernel and link everything
+RUN g++ -c -ffreestanding -fno-exceptions -fno-rtti -fno-pie main.cpp -o kernel.o && \
+    ld -T linker.ld -o phone_os boot.o hardware.o kernel.o
 
-# Final stage
+# Create bootable image
+RUN mkdir -p iso/boot/grub && \
+    cp phone_os iso/boot/ && \
+    echo 'set timeout=0' > iso/boot/grub/grub.cfg && \
+    echo 'set default=0' >> iso/boot/grub/grub.cfg && \
+    echo 'menuentry "PhoneOS" {' >> iso/boot/grub/grub.cfg && \
+    echo '  multiboot /boot/phone_os' >> iso/boot/grub/grub.cfg && \
+    echo '}' >> iso/boot/grub/grub.cfg && \
+    grub-mkrescue -o phone_os.iso iso
+
+# Runtime environment
 FROM debian:bullseye-slim
 
-WORKDIR /app
-COPY --from=builder /app/phone_os .
+WORKDIR /os
+COPY --from=builder /os/phone_os.iso .
+COPY --from=builder /os/phone_os .
 
-# Expose port for remote management
 EXPOSE 8080
 
-# Run the OS
 CMD ["./phone_os"]
