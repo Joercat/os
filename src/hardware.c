@@ -1,4 +1,4 @@
-#include "include/stdint.h"
+#include <stdint.h>
 
 // Function declarations
 uint64_t* get_page_directory(void);
