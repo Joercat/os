@@ -2,7 +2,7 @@
 FROM gcc:latest as builder
 
 WORKDIR /app
-COPY src/ .
+COPY . .
 
 # Install NASM assembler
 RUN apt-get update && apt-get install -y nasm
