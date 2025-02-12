@@ -7,8 +7,8 @@ _start:
     call main
     
 init_platform:
-    push ebp
-    mov ebp, esp
-    ; Platform initialization code
-    pop ebp
+    push rbp
+    mov rbp, rsp
+    ; 64-bit platform initialization
+    pop rbp
     ret
