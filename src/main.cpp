@@ -1,41 +1,41 @@
-#include <zlib.h>
-#include <string>
-#include <fstream>
-#include <vector>
+#include <stdint.h>
 
-class Compressor {
-private:
-    z_stream strm;
-    std::vector<uint8_t> buffer;
-
-public:
-    void compressFile(const std::string& input, const std::string& output) {
-        std::ifstream inFile(input, std::ios::binary);
-        std::ofstream outFile(output, std::ios::binary);
-        
-        // Read input file
-        inFile.seekg(0, std::ios::end);
-        size_t size = inFile.tellg();
-        inFile.seekg(0);
-        
-        buffer.resize(size);
-        inFile.read((char*)buffer.data(), size);
-        
-        // Initialize zlib
-        deflateInit(&strm, Z_BEST_COMPRESSION);
-        
-        // Compress
-        std::vector<uint8_t> outBuffer(size);
-        strm.next_in = buffer.data();
-        strm.avail_in = size;
-        strm.next_out = outBuffer.data();
-        strm.avail_out = size;
-        
-        deflate(&strm, Z_FINISH);
-        
-        // Write compressed data
-        outFile.write((char*)outBuffer.data(), size - strm.avail_out);
-        
-        deflateEnd(&strm);
+// OS Kernel entry point
+extern "C" void kernel_main() {
+    // Initialize core OS components
+    init_video_memory();
+    setup_interrupt_table();
+    init_memory_manager();
+    
+    // Start system services
+    while(1) {
+        schedule_tasks();
+        handle_interrupts();
+        update_display();
     }
-};
+}
+
+// Video memory management
+void init_video_memory() {
+    volatile uint32_t* video_memory = (uint32_t*)0xB8000;
+    // Clear screen
+    for(int i = 0; i < 80*25; i++) {
+        video_memory[i] = 0x0F200F20;
+    }
+}
+
+void schedule_tasks() {
+    // Round-robin task scheduler
+    check_process_queue();
+    switch_context();
+}
+
+void handle_interrupts() {
+    // Handle hardware and software interrupts
+    process_interrupt_queue();
+}
+
+void update_display() {
+    refresh_screen_buffer();
+    update_gpu_state();
+}
