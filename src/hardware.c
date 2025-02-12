@@ -1,45 +1,35 @@
-#include <stdio.h>
 #include <stdint.h>
 
-// Function prototypes
-void setup_cpu(void);
-void init_memory(void);
-void configure_display(void);
-void register_handlers(void);
-void enable_irq(void);
-
-void init_hardware(void) {
-    setup_cpu();
-    init_memory();
-    configure_display();
+// Hardware abstraction layer
+void init_memory_manager() {
+    setup_page_tables();
+    enable_paging();
 }
 
-void setup_cpu(void) {
-    // CPU initialization code
-    printf("CPU initialized\n");
+void setup_page_tables() {
+    // Set up 4-level paging
+    uint64_t* pml4 = (uint64_t*)0x1000;
+    map_kernel_space(pml4);
 }
 
-void init_memory(void) {
-    // Memory initialization
-    printf("Memory initialized\n");
+void enable_paging() {
+    // Enable hardware paging
+    __asm__ volatile (
+        "movq %0, %%cr3"
+        :
+        : "r"(get_page_directory())
+    );
 }
 
-void configure_display(void) {
-    // Display configuration
-    printf("Display configured\n");
+void setup_interrupt_table() {
+    // Initialize IDT
+    load_idt();
+    setup_pic();
+    enable_interrupts();
 }
 
-void setup_interrupts(void) {
-    register_handlers();
-    enable_irq();
-}
-
-void register_handlers(void) {
-    // Register interrupt handlers
-    printf("Handlers registered\n");
-}
-
-void enable_irq(void) {
-    // Enable interrupts
-    printf("IRQ enabled\n");
+void process_interrupt_queue() {
+    // Process pending interrupts
+    handle_hardware_interrupts();
+    handle_software_interrupts();
 }
