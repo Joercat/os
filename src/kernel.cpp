@@ -26,7 +26,7 @@ private:
         bool active;
     };
     
-    Task tasks[64];
+    Task tasks[64] = {};
     int current_task = 0;
     
 public:
@@ -38,8 +38,8 @@ public:
     
     void setup_interrupts() {
         for (int i = 0; i < 256; i++) {
-            idt[i].selector = 0x08;
-            idt[i].type_attr = 0x8E;
+            idt[i].selector = 0x08; // Kernel code segment selector
+            idt[i].type_attr = 0x8E; // Present, Ring 0, Interrupt Gate
         }
         load_idt();
         enable_pic();
@@ -47,14 +47,14 @@ public:
     
     void init_video() {
         for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-            video_memory[i] = 0x0F20;
+            video_memory[i] = 0x0F20; // Light gray on black
         }
     }
     
     void setup_paging() {
-        uint64_t* pml4 = (uint64_t*)0x1000;
+        uint64_t* pml4 = (uint64_t*)0x1000; // Ensure this address is valid in your environment
         for (int i = 0; i < 512; i++) {
-            pml4[i] = 0x2000 | 0x3;
+            pml4[i] = (i << 21) | 0x3; // Map the first 512 MB of memory
         }
         asm volatile("mov %0, %%cr3" : : "r"(pml4));
     }
@@ -73,15 +73,15 @@ private:
     }
     
     void enable_pic() {
-        outb(0x20, 0x11);
-        outb(0xA0, 0x11);
-        outb(0x21, 0x20);
-        outb(0xA1, 0x28);
-        outb(0x21, 0x04);
-        outb(0xA1, 0x02);
-        outb(0x21, 0x01);
-        outb(0xA1, 0x01);
-        outb(0x21, 0x0);
+        outb(0x20, 0x11); // Initialize master PIC
+        outb(0xA0, 0x11); // Initialize slave PIC
+        outb(0x21, 0x20); // Master PIC vector offset
+        outb(0xA1, 0x28); // Slave PIC vector offset
+        outb(0x21, 0x04); // Master PIC, slave on IRQ2
+        outb(0xA1, 0x02); // Slave PIC IR2
+        outb(0x21, 0x01); // Master PIC, 8086 mode
+        outb(0xA1, 0x01); // Slave PIC, 8086 mode
+        outb(0x21, 0x0);   // Unmask all IRQs
         outb(0xA1, 0x0);
     }
     
@@ -104,8 +104,8 @@ private:
     void handle_hardware_events() {
         // Process hardware interrupts
         uint8_t irq = inb(0x20);
-        if(irq) {
-            outb(0x20, 0x20);
+        if (irq) {
+            outb(0x20, 0x20); // Send end of interrupt (EOI) to master PIC
         }
     }
     
@@ -119,10 +119,10 @@ private:
     }
     
     void update_task_queue() {
-        // Update task states
-        for(int i = 0; i < 64; i++) {
-            if(tasks[i].active) {
-                // Check task status
+        // Update task states, if necessary
+        for (int i = 0; i < 64; i++) {
+            if (tasks[i].active) {
+                // Additional logic can be placed here
             }
         }
     }
@@ -130,12 +130,12 @@ private:
     void switch_context() {
         // Find next task
         int next_task = (current_task + 1) % 64;
-        while(!tasks[next_task].active && next_task != current_task) {
+        while (!tasks[next_task].active && next_task != current_task) {
             next_task = (next_task + 1) % 64;
         }
         
-        if(next_task != current_task) {
-            // Switch to next task
+        if (next_task != current_task) {
+            // Switch to next task, context switching logic should be here
             current_task = next_task;
         }
     }
@@ -147,11 +147,7 @@ private:
     
     void refresh_screen_buffer() {
         // Update screen contents
-        for(int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-            if(video_memory[i] != 0x0F20) {
-                video_memory[i] = video_memory[i];
-            }
-        }
+        // This function can be optimized; currently a no-op
     }
     
     void update_cursor() {
