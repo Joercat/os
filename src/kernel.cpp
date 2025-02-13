@@ -141,161 +141,16 @@ public:
         asm volatile("sti");
     }
 
-    
-    void configure_pic() {
-        // ICW1
-        outb(0x20, 0x11);
-        outb(0xA0, 0x11);
-        
-        // ICW2
-        outb(0x21, 0x20);
-        outb(0xA1, 0x28);
-        
-        // ICW3
-        outb(0x21, 0x04);
-        outb(0xA1, 0x02);
-        
-        // ICW4
-        outb(0x21, 0x01);
-        outb(0xA1, 0x01);
-        
-        // OCW1
-        outb(0x21, 0x0);
-        outb(0xA1, 0x0);
-    }
-    
-    void init_video() {
-        for(uint32_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-            video_memory[i] = 0x0F20;
-        }
-        cursor_x = 0;
-        cursor_y = 0;
-    }
-    
-    void init_task_manager() {
-        for(uint32_t i = 0; i < MAX_TASKS; i++) {
-            tasks[i].active = false;
-            tasks[i].priority = 0;
-            tasks[i].time_slice = 100;
-        }
-        task_count = 0;
-        current_task = 0;
-    }
-    
-    void process_interrupts() {
-        uint8_t irq = check_interrupts();
-        if(irq) {
-            handle_interrupt(irq);
+    void start() {
+        while(true) {
+            process_interrupts();
+            schedule_tasks();
+            update_display();
+            check_system_status();
         }
     }
-    
-    uint8_t check_interrupts() {
-        return inb(0x20);
-    }
-    
-    void handle_interrupt(uint8_t irq) {
-        switch(irq) {
-            case 1:  // Keyboard
-                handle_keyboard();
-                break;
-            case 8:  // Timer
-                handle_timer();
-                break;
-            default:
-                send_eoi(irq);
-                break;
-        }
-    }
-    
-    void schedule_tasks() {
-        if(task_count == 0) return;
-        
-        uint32_t next_task = find_next_task();
-        if(next_task != current_task) {
-            switch_task(next_task);
-        }
-    }
-    
-    uint32_t find_next_task() {
-        uint32_t highest_priority = 0;
-        uint32_t selected_task = current_task;
-        
-        for(uint32_t i = 0; i < MAX_TASKS; i++) {
-            if(tasks[i].active && tasks[i].priority > highest_priority) {
-                highest_priority = tasks[i].priority;
-                selected_task = i;
-            }
-        }
-        
-        return selected_task;
-    }
-    
-    void switch_task(uint32_t new_task) {
-        Task& old_task = tasks[current_task];
-        Task& new_task_obj = tasks[new_task];
-        
-        // Save current context
-        asm volatile("mov %%rsp, %0" : "=r"(old_task.rsp));
-        asm volatile("mov %%cr3, %0" : "=r"(old_task.cr3));
-        
-        // Load new context
-        asm volatile("mov %0, %%cr3" : : "r"(new_task_obj.cr3));
-        asm volatile("mov %0, %%rsp" : : "r"(new_task_obj.rsp));
-        
-        current_task = new_task;
-    }
-    
-    void update_display() {
-        refresh_screen();
-        update_cursor();
-    }
-    
-    void refresh_screen() {
-        // Only update changed portions
-        static uint16_t buffer[VGA_WIDTH * VGA_HEIGHT];
-        for(uint32_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-            if(buffer[i] != video_memory[i]) {
-                buffer[i] = video_memory[i];
-            }
-        }
-    }
-    
-    void update_cursor() {
-        uint16_t pos = cursor_y * VGA_WIDTH + cursor_x;
-        outb(0x3D4, 14);
-        outb(0x3D5, pos >> 8);
-        outb(0x3D4, 15);
-        outb(0x3D5, pos & 0xFF);
-    }
-    
-    void check_system_status() {
-        check_memory_integrity();
-        verify_task_states();
-    }
-    
-    void check_memory_integrity() {
-        for(uint32_t i = 0; i < region_count; i++) {
-            verify_memory_region(protected_regions[i]);
-        }
-    }
-    
-    void verify_memory_region(const MemoryRegion& region) {
-        volatile uint8_t* mem = (uint8_t*)region.start;
-        for(uint64_t i = 0; i < region.size; i++) {
-            mem[i];  // Just access to check for page faults
-        }
-    }
-    
-    void verify_task_states() {
-        uint32_t active_count = 0;
-        for(uint32_t i = 0; i < MAX_TASKS; i++) {
-            if(tasks[i].active) {
-                active_count++;
-            }
-        }
-        task_count = active_count;
-    }
-    
+
+private:
     inline void outb(uint16_t port, uint8_t val) {
         asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
     }
@@ -305,45 +160,60 @@ public:
         asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
         return ret;
     }
-    
-    void send_eoi(uint8_t irq) {
+
+    void process_interrupts() {
+        uint8_t irq = inb(0x20);
+        if(irq) {
+            handle_interrupt(irq);
+        }
+    }
+
+    void handle_interrupt(uint8_t irq) {
         if(irq >= 8) {
             outb(0xA0, 0x20);
         }
         outb(0x20, 0x20);
     }
-    
-    void handle_keyboard() {
-        uint8_t scancode = inb(0x60);
-        process_keypress(scancode);
-        send_eoi(1);
-    }
-    
-    void handle_timer() {
-        update_task_timers();
-        send_eoi(8);
-    }
-    
-    void process_keypress(uint8_t scancode) {
-        // Handle keyboard input
-        if(scancode < 0x80) {
-            // Key press
-            update_keyboard_buffer(scancode);
+
+    void schedule_tasks() {
+        if(task_count == 0) return;
+        
+        uint32_t next_task = (current_task + 1) % MAX_TASKS;
+        while(!tasks[next_task].active && next_task != current_task) {
+            next_task = (next_task + 1) % MAX_TASKS;
+        }
+        
+        if(next_task != current_task) {
+            switch_task(next_task);
         }
     }
-    
-    void update_keyboard_buffer(uint8_t scancode) {
-        static uint8_t buffer[16];
-        static uint32_t buffer_pos = 0;
+
+    void switch_task(uint32_t new_task) {
+        Task& old_task = tasks[current_task];
+        Task& new_task_obj = tasks[new_task];
         
-        buffer[buffer_pos++] = scancode;
-        if(buffer_pos >= 16) buffer_pos = 0;
+        asm volatile("mov %%rsp, %0" : "=r"(old_task.rsp));
+        asm volatile("mov %%cr3, %0" : "=r"(old_task.cr3));
+        
+        asm volatile("mov %0, %%cr3" : : "r"(new_task_obj.cr3));
+        asm volatile("mov %0, %%rsp" : : "r"(new_task_obj.rsp));
+        
+        current_task = new_task;
     }
-    
-    void update_task_timers() {
-        for(uint32_t i = 0; i < MAX_TASKS; i++) {
-            if(tasks[i].active && tasks[i].time_slice > 0) {
-                tasks[i].time_slice--;
+
+    void update_display() {
+        uint16_t pos = cursor_y * VGA_WIDTH + cursor_x;
+        outb(0x3D4, 14);
+        outb(0x3D5, pos >> 8);
+        outb(0x3D4, 15);
+        outb(0x3D5, pos & 0xFF);
+    }
+
+    void check_system_status() {
+        for(uint32_t i = 0; i < region_count; i++) {
+            volatile uint8_t* mem = (uint8_t*)protected_regions[i].start;
+            for(uint64_t j = 0; j < protected_regions[i].size; j++) {
+                mem[j];
             }
         }
     }
@@ -352,5 +222,5 @@ public:
 extern "C" void kernel_main() {
     PhoneOS os;
     os.init();
-    os.run();
+    os.start();
 }
