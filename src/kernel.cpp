@@ -5,6 +5,8 @@ private:
     static constexpr uint16_t VGA_WIDTH = 80;
     static constexpr uint16_t VGA_HEIGHT = 25;
     uint16_t* video_memory = (uint16_t*)0xB8000;
+    uint16_t cursor_x = 0;
+    uint16_t cursor_y = 0;
     
     struct IDTEntry {
         uint16_t offset_low;
@@ -17,6 +19,15 @@ private:
     } __attribute__((packed));
 
     IDTEntry idt[256];
+    
+    struct Task {
+        uint64_t rsp;
+        uint64_t cr3;
+        bool active;
+    };
+    
+    Task tasks[64];
+    int current_task = 0;
     
 public:
     void init() {
@@ -90,14 +101,71 @@ private:
         handle_system_calls();
     }
     
+    void handle_hardware_events() {
+        // Process hardware interrupts
+        uint8_t irq = inb(0x20);
+        if(irq) {
+            outb(0x20, 0x20);
+        }
+    }
+    
+    void handle_system_calls() {
+        // Handle system calls
+    }
+    
     void schedule_tasks() {
         update_task_queue();
         switch_context();
     }
     
+    void update_task_queue() {
+        // Update task states
+        for(int i = 0; i < 64; i++) {
+            if(tasks[i].active) {
+                // Check task status
+            }
+        }
+    }
+    
+    void switch_context() {
+        // Find next task
+        int next_task = (current_task + 1) % 64;
+        while(!tasks[next_task].active && next_task != current_task) {
+            next_task = (next_task + 1) % 64;
+        }
+        
+        if(next_task != current_task) {
+            // Switch to next task
+            current_task = next_task;
+        }
+    }
+    
     void update_display() {
         refresh_screen_buffer();
         update_cursor();
+    }
+    
+    void refresh_screen_buffer() {
+        // Update screen contents
+        for(int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+            if(video_memory[i] != 0x0F20) {
+                video_memory[i] = video_memory[i];
+            }
+        }
+    }
+    
+    void update_cursor() {
+        uint16_t pos = cursor_y * VGA_WIDTH + cursor_x;
+        outb(0x3D4, 14);
+        outb(0x3D5, pos >> 8);
+        outb(0x3D4, 15);
+        outb(0x3D5, pos & 0xFF);
+    }
+    
+    inline uint8_t inb(uint16_t port) {
+        uint8_t ret;
+        asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
+        return ret;
     }
 };
 
