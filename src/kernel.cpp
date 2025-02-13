@@ -2,12 +2,19 @@
 
 class PhoneOS {
 private:
+    // Hardware constants
     static constexpr uint16_t VGA_WIDTH = 80;
     static constexpr uint16_t VGA_HEIGHT = 25;
-    uint16_t* video_memory = (uint16_t*)0xB8000;
+    static constexpr uint16_t MAX_TASKS = 64;
+    static constexpr uint64_t PAGE_SIZE = 4096;
+    
+    // Memory management
+    volatile uint16_t* const video_memory = (uint16_t*)0xB8000;
+    uint64_t* const page_directory = (uint64_t*)0x1000;
     uint16_t cursor_x = 0;
     uint16_t cursor_y = 0;
     
+    // Interrupt handling
     struct IDTEntry {
         uint16_t offset_low;
         uint16_t selector;
@@ -18,45 +25,40 @@ private:
         uint32_t zero;
     } __attribute__((packed));
 
-    IDTEntry idt[256];
+    alignas(8) IDTEntry idt[256];
     
+    // Task management
     struct Task {
         uint64_t rsp;
         uint64_t cr3;
         bool active;
+        uint8_t priority;
+        uint32_t time_slice;
     };
     
-    Task tasks[64] = {};
-    int current_task = 0;
+    alignas(16) Task tasks[MAX_TASKS];
+    uint32_t current_task = 0;
+    uint32_t task_count = 0;
     
+    // Memory protection
+    struct MemoryRegion {
+        uint64_t start;
+        uint64_t size;
+        uint32_t permissions;
+    };
+    
+    MemoryRegion protected_regions[16];
+    uint32_t region_count = 0;
+
 public:
     void init() {
+        disable_interrupts();
+        setup_protected_memory();
+        setup_paging();
         setup_interrupts();
         init_video();
-        setup_paging();
-    }
-    
-    void setup_interrupts() {
-        for (int i = 0; i < 256; i++) {
-            idt[i].selector = 0x08; // Kernel code segment selector
-            idt[i].type_attr = 0x8E; // Present, Ring 0, Interrupt Gate
-        }
-        load_idt();
-        enable_pic();
-    }
-    
-    void init_video() {
-        for (int i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
-            video_memory[i] = 0x0F20; // Light gray on black
-        }
-    }
-    
-    void setup_paging() {
-        uint64_t* pml4 = (uint64_t*)0x1000; // Ensure this address is valid in your environment
-        for (int i = 0; i < 512; i++) {
-            pml4[i] = (i << 21) | 0x3; // Map the first 512 MB of memory
-        }
-        asm volatile("mov %0, %%cr3" : : "r"(pml4));
+        init_task_manager();
+        enable_interrupts();
     }
     
     void run() {
@@ -64,90 +66,180 @@ public:
             process_interrupts();
             schedule_tasks();
             update_display();
+            check_system_status();
         }
     }
 
 private:
-    inline void outb(uint16_t port, uint8_t val) {
-        asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+    inline void disable_interrupts() {
+        asm volatile("cli");
     }
     
-    void enable_pic() {
-        outb(0x20, 0x11); // Initialize master PIC
-        outb(0xA0, 0x11); // Initialize slave PIC
-        outb(0x21, 0x20); // Master PIC vector offset
-        outb(0xA1, 0x28); // Slave PIC vector offset
-        outb(0x21, 0x04); // Master PIC, slave on IRQ2
-        outb(0xA1, 0x02); // Slave PIC IR2
-        outb(0x21, 0x01); // Master PIC, 8086 mode
-        outb(0xA1, 0x01); // Slave PIC, 8086 mode
-        outb(0x21, 0x0);   // Unmask all IRQs
-        outb(0xA1, 0x0);
+    inline void enable_interrupts() {
+        asm volatile("sti");
+    }
+    
+    void setup_protected_memory() {
+        for(uint32_t i = 0; i < 16; i++) {
+            protected_regions[i] = {0, 0, 0};
+        }
+        
+        // Protect kernel space
+        protected_regions[0] = {0x0, PAGE_SIZE * 1024, 0x3};
+        region_count = 1;
+    }
+    
+    void setup_paging() {
+        for(uint32_t i = 0; i < 512; i++) {
+            page_directory[i] = (i * PAGE_SIZE) | 0x83;
+        }
+        
+        uint64_t cr3_val = (uint64_t)page_directory;
+        asm volatile("mov %0, %%cr3" : : "r"(cr3_val) : "memory");
+    }
+    
+    void setup_interrupts() {
+        for(uint32_t i = 0; i < 256; i++) {
+            idt[i].selector = 0x08;
+            idt[i].type_attr = 0x8E;
+            idt[i].ist = 0;
+            idt[i].zero = 0;
+        }
+        
+        load_idt();
+        configure_pic();
     }
     
     void load_idt() {
-        struct {
+        struct IDTR {
             uint16_t limit;
             uint64_t base;
-        } __attribute__((packed)) IDTR = {
-            sizeof(idt) - 1,
-            (uint64_t)idt,
+        } __attribute__((packed));
+        
+        IDTR idtr = {
+            static_cast<uint16_t>(sizeof(idt) - 1),
+            reinterpret_cast<uint64_t>(idt)
         };
-        asm volatile("lidt %0" : : "m"(IDTR));
+        
+        asm volatile("lidt %0" : : "m"(idtr) : "memory");
+    }
+    
+    void configure_pic() {
+        // ICW1
+        outb(0x20, 0x11);
+        outb(0xA0, 0x11);
+        
+        // ICW2
+        outb(0x21, 0x20);
+        outb(0xA1, 0x28);
+        
+        // ICW3
+        outb(0x21, 0x04);
+        outb(0xA1, 0x02);
+        
+        // ICW4
+        outb(0x21, 0x01);
+        outb(0xA1, 0x01);
+        
+        // OCW1
+        outb(0x21, 0x0);
+        outb(0xA1, 0x0);
+    }
+    
+    void init_video() {
+        for(uint32_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+            video_memory[i] = 0x0F20;
+        }
+        cursor_x = 0;
+        cursor_y = 0;
+    }
+    
+    void init_task_manager() {
+        for(uint32_t i = 0; i < MAX_TASKS; i++) {
+            tasks[i].active = false;
+            tasks[i].priority = 0;
+            tasks[i].time_slice = 100;
+        }
+        task_count = 0;
+        current_task = 0;
     }
     
     void process_interrupts() {
-        handle_hardware_events();
-        handle_system_calls();
-    }
-    
-    void handle_hardware_events() {
-        // Process hardware interrupts
-        uint8_t irq = inb(0x20);
-        if (irq) {
-            outb(0x20, 0x20); // Send end of interrupt (EOI) to master PIC
+        uint8_t irq = check_interrupts();
+        if(irq) {
+            handle_interrupt(irq);
         }
     }
     
-    void handle_system_calls() {
-        // Handle system calls
+    uint8_t check_interrupts() {
+        return inb(0x20);
+    }
+    
+    void handle_interrupt(uint8_t irq) {
+        switch(irq) {
+            case 1:  // Keyboard
+                handle_keyboard();
+                break;
+            case 8:  // Timer
+                handle_timer();
+                break;
+            default:
+                send_eoi(irq);
+                break;
+        }
     }
     
     void schedule_tasks() {
-        update_task_queue();
-        switch_context();
+        if(task_count == 0) return;
+        
+        uint32_t next_task = find_next_task();
+        if(next_task != current_task) {
+            switch_task(next_task);
+        }
     }
     
-    void update_task_queue() {
-        // Update task states, if necessary
-        for (int i = 0; i < 64; i++) {
-            if (tasks[i].active) {
-                // Additional logic can be placed here
+    uint32_t find_next_task() {
+        uint32_t highest_priority = 0;
+        uint32_t selected_task = current_task;
+        
+        for(uint32_t i = 0; i < MAX_TASKS; i++) {
+            if(tasks[i].active && tasks[i].priority > highest_priority) {
+                highest_priority = tasks[i].priority;
+                selected_task = i;
             }
         }
+        
+        return selected_task;
     }
     
-    void switch_context() {
-        // Find next task
-        int next_task = (current_task + 1) % 64;
-        while (!tasks[next_task].active && next_task != current_task) {
-            next_task = (next_task + 1) % 64;
-        }
+    void switch_task(uint32_t new_task) {
+        Task& old_task = tasks[current_task];
+        Task& new_task_obj = tasks[new_task];
         
-        if (next_task != current_task) {
-            // Switch to next task, context switching logic should be here
-            current_task = next_task;
-        }
+        // Save current context
+        asm volatile("mov %%rsp, %0" : "=r"(old_task.rsp));
+        asm volatile("mov %%cr3, %0" : "=r"(old_task.cr3));
+        
+        // Load new context
+        asm volatile("mov %0, %%cr3" : : "r"(new_task_obj.cr3));
+        asm volatile("mov %0, %%rsp" : : "r"(new_task_obj.rsp));
+        
+        current_task = new_task;
     }
     
     void update_display() {
-        refresh_screen_buffer();
+        refresh_screen();
         update_cursor();
     }
     
-    void refresh_screen_buffer() {
-        // Update screen contents
-        // This function can be optimized; currently a no-op
+    void refresh_screen() {
+        // Only update changed portions
+        static uint16_t buffer[VGA_WIDTH * VGA_HEIGHT];
+        for(uint32_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+            if(buffer[i] != video_memory[i]) {
+                buffer[i] = video_memory[i];
+            }
+        }
     }
     
     void update_cursor() {
@@ -158,10 +250,84 @@ private:
         outb(0x3D5, pos & 0xFF);
     }
     
+    void check_system_status() {
+        check_memory_integrity();
+        verify_task_states();
+    }
+    
+    void check_memory_integrity() {
+        for(uint32_t i = 0; i < region_count; i++) {
+            verify_memory_region(protected_regions[i]);
+        }
+    }
+    
+    void verify_memory_region(const MemoryRegion& region) {
+        volatile uint8_t* mem = (uint8_t*)region.start;
+        for(uint64_t i = 0; i < region.size; i++) {
+            mem[i];  // Just access to check for page faults
+        }
+    }
+    
+    void verify_task_states() {
+        uint32_t active_count = 0;
+        for(uint32_t i = 0; i < MAX_TASKS; i++) {
+            if(tasks[i].active) {
+                active_count++;
+            }
+        }
+        task_count = active_count;
+    }
+    
+    inline void outb(uint16_t port, uint8_t val) {
+        asm volatile("outb %0, %1" : : "a"(val), "Nd"(port));
+    }
+    
     inline uint8_t inb(uint16_t port) {
         uint8_t ret;
         asm volatile("inb %1, %0" : "=a"(ret) : "Nd"(port));
         return ret;
+    }
+    
+    void send_eoi(uint8_t irq) {
+        if(irq >= 8) {
+            outb(0xA0, 0x20);
+        }
+        outb(0x20, 0x20);
+    }
+    
+    void handle_keyboard() {
+        uint8_t scancode = inb(0x60);
+        process_keypress(scancode);
+        send_eoi(1);
+    }
+    
+    void handle_timer() {
+        update_task_timers();
+        send_eoi(8);
+    }
+    
+    void process_keypress(uint8_t scancode) {
+        // Handle keyboard input
+        if(scancode < 0x80) {
+            // Key press
+            update_keyboard_buffer(scancode);
+        }
+    }
+    
+    void update_keyboard_buffer(uint8_t scancode) {
+        static uint8_t buffer[16];
+        static uint32_t buffer_pos = 0;
+        
+        buffer[buffer_pos++] = scancode;
+        if(buffer_pos >= 16) buffer_pos = 0;
+    }
+    
+    void update_task_timers() {
+        for(uint32_t i = 0; i < MAX_TASKS; i++) {
+            if(tasks[i].active && tasks[i].time_slice > 0) {
+                tasks[i].time_slice--;
+            }
+        }
     }
 };
 
