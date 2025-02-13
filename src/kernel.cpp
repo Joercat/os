@@ -52,77 +52,95 @@ private:
 
 public:
     void init() {
-        disable_interrupts();
-        setup_protected_memory();
-        setup_paging();
-        setup_interrupts();
-        init_video();
-        init_task_manager();
-        enable_interrupts();
-    }
-    
-    void run() {
-        while(true) {
-            process_interrupts();
-            schedule_tasks();
-            update_display();
-            check_system_status();
+        // Initial memory setup
+        volatile uint8_t* kernel_space = (uint8_t*)0x0;
+        for(uint32_t i = 0; i < 0x1000000; i++) {
+            kernel_space[i] = 0;
         }
-    }
 
-private:
-    inline void disable_interrupts() {
+        // Set up identity mapping for first 4GB
+        uint64_t* pml4 = (uint64_t*)0x1000;
+        uint64_t* pdpt = (uint64_t*)0x2000;
+        uint64_t* pd = (uint64_t*)0x3000;
+
+        pml4[0] = (uint64_t)pdpt | 0x3;
+        pdpt[0] = (uint64_t)pd | 0x3;
+        
+        for(uint32_t i = 0; i < 512; i++) {
+            pd[i] = (i * 0x200000) | 0x83;  // 2MB pages
+        }
+
+        // Set CR3 to point to our page tables
+        asm volatile("mov %0, %%cr3" : : "r"(pml4) : "memory");
+        
+        // Disable interrupts during setup
         asm volatile("cli");
-    }
-    
-    inline void enable_interrupts() {
-        asm volatile("sti");
-    }
-    
-    void setup_protected_memory() {
+
+        // Initialize memory protection
         for(uint32_t i = 0; i < 16; i++) {
             protected_regions[i] = {0, 0, 0};
         }
-        
-        // Protect kernel space
         protected_regions[0] = {0x0, PAGE_SIZE * 1024, 0x3};
         region_count = 1;
-    }
-    
-    void setup_paging() {
-        for(uint32_t i = 0; i < 512; i++) {
-            page_directory[i] = (i * PAGE_SIZE) | 0x83;
-        }
-        
-        uint64_t cr3_val = (uint64_t)page_directory;
-        asm volatile("mov %0, %%cr3" : : "r"(cr3_val) : "memory");
-    }
-    
-    void setup_interrupts() {
+
+        // Set up IDT
         for(uint32_t i = 0; i < 256; i++) {
             idt[i].selector = 0x08;
             idt[i].type_attr = 0x8E;
             idt[i].ist = 0;
             idt[i].zero = 0;
         }
-        
-        load_idt();
-        configure_pic();
-    }
-    
-    void load_idt() {
+
+        // Load IDT
         struct IDTR {
             uint16_t limit;
             uint64_t base;
-        } __attribute__((packed));
-        
-        IDTR idtr = {
+        } __attribute__((packed)) idtr = {
             static_cast<uint16_t>(sizeof(idt) - 1),
             reinterpret_cast<uint64_t>(idt)
         };
-        
         asm volatile("lidt %0" : : "m"(idtr) : "memory");
+
+        // Configure PIC
+        outb(0x20, 0x11);
+        outb(0xA0, 0x11);
+        outb(0x21, 0x20);
+        outb(0xA1, 0x28);
+        outb(0x21, 0x04);
+        outb(0xA1, 0x02);
+        outb(0x21, 0x01);
+        outb(0xA1, 0x01);
+        outb(0x21, 0x0);
+        outb(0xA1, 0x0);
+
+        // Initialize video memory
+        for(uint32_t i = 0; i < VGA_WIDTH * VGA_HEIGHT; i++) {
+            video_memory[i] = 0x0F20;
+        }
+        cursor_x = 0;
+        cursor_y = 0;
+
+        // Initialize task system
+        for(uint32_t i = 0; i < MAX_TASKS; i++) {
+            tasks[i].active = false;
+            tasks[i].priority = 0;
+            tasks[i].time_slice = 100;
+            tasks[i].rsp = 0;
+            tasks[i].cr3 = 0;
+        }
+        task_count = 0;
+        current_task = 0;
+
+        // Set up system timer
+        outb(0x43, 0x36);
+        uint16_t count = 1193180 / 100;  // 100 Hz
+        outb(0x40, count & 0xFF);
+        outb(0x40, count >> 8);
+
+        // Enable interrupts
+        asm volatile("sti");
     }
+
     
     void configure_pic() {
         // ICW1
