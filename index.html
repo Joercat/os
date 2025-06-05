@@ -4,9 +4,1018 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>WebOS - Web-based Operating System</title>
-    <link rel="stylesheet" href="css/style.css">
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💻</text></svg>">
 </head>
+    <style>
+        /* Reset and Base Styles */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    overflow: hidden;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    height: 100vh;
+    user-select: none;
+}
+
+/* Boot Screen */
+.boot-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.boot-content {
+    text-align: center;
+    color: white;
+}
+
+.boot-logo {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    animation: pulse 2s infinite;
+}
+
+.boot-content h1 {
+    font-size: 2.5rem;
+    margin-bottom: 2rem;
+    font-weight: 300;
+}
+
+.boot-progress {
+    width: 300px;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 4px;
+    background: #333;
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #4CAF50, #45a049);
+    width: 0%;
+    transition: width 0.5s ease;
+}
+
+.boot-text {
+    font-size: 0.9rem;
+    opacity: 0.8;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+/* Desktop */
+.desktop {
+    width: 100vw;
+    height: 100vh;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    position: relative;
+    overflow: hidden;
+}
+
+.desktop::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-image: 
+        radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%);
+    pointer-events: none;
+}
+
+/* Taskbar */
+.taskbar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    align-items: center;
+    z-index: 1000;
+}
+
+.taskbar-left {
+    display: flex;
+    align-items: center;
+    position: relative;
+}
+
+.start-button {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+    border: none;
+    color: white;
+    padding: 8px 16px;
+    margin: 0 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.start-button:hover {
+    background: linear-gradient(135deg, #45a049, #4CAF50);
+    transform: translateY(-1px);
+}
+
+.start-icon {
+    font-size: 16px;
+}
+
+.start-menu {
+    position: absolute;
+    bottom: 48px;
+    left: 8px;
+    width: 280px;
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: none;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.start-menu-header {
+    padding: 16px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+}
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.user-avatar {
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+}
+
+.user-name {
+    font-weight: 500;
+}
+
+.start-menu-items {
+    padding: 8px 0;
+}
+
+.menu-item {
+    padding: 12px 16px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: background 0.2s ease;
+}
+
+.menu-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-icon {
+    font-size: 16px;
+    width: 20px;
+}
+
+.menu-separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 16px;
+}
+
+.taskbar-center {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+}
+
+.taskbar-windows {
+    display: flex;
+    gap: 4px;
+}
+
+.taskbar-window {
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+}
+
+.taskbar-window:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.taskbar-window.active {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.taskbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding-right: 12px;
+}
+
+.system-tray {
+    display: flex;
+    gap: 8px;
+}
+
+.tray-icon {
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 4px;
+    transition: background 0.2s ease;
+}
+
+.tray-icon:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.clock {
+    color: white;
+    text-align: right;
+    font-size: 12px;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+.time {
+    font-weight: 500;
+}
+
+.date {
+    opacity: 0.8;
+}
+
+/* Desktop Icons */
+.desktop-icons {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, 80px);
+    gap: 20px;
+    z-index: 1;
+}
+
+.desktop-icon {
+    width: 80px;
+    text-align: center;
+    cursor: pointer;
+    padding: 8px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+
+.desktop-icon:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+}
+
+.desktop-icon .icon {
+    font-size: 32px;
+    margin-bottom: 4px;
+}
+
+.icon-label {
+    color: white;
+    font-size: 11px;
+    font-weight: 500;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    word-wrap: break-word;
+}
+
+/* Windows */
+.window {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    min-width: 300px;
+    min-height: 200px;
+    z-index: 100;
+    overflow: hidden;
+}
+
+.window.maximized {
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: calc(100vh - 48px) !important;
+    border-radius: 0;
+}
+
+.window-header {
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: move;
+    user-select: none;
+}
+
+.window-title {
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.window-controls {
+    display: flex;
+    gap: 8px;
+}
+
+.window-btn {
+    background: rgba(255, 255, 255, 0.2);
+    border: none;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: bold;
+    transition: background 0.2s ease;
+}
+
+.window-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.window-btn.close:hover {
+    background: #ff4757;
+}
+
+.window-content {
+    padding: 16px;
+    height: calc(100% - 48px);
+    overflow: auto;
+}
+
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    background: rgba(30, 30, 30, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 4px 0;
+    min-width: 150px;
+    display: none;
+    z-index: 2000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.context-item {
+    padding: 8px 12px;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    transition: background 0.2s ease;
+}
+
+.context-item:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.context-icon {
+    font-size: 14px;
+    width: 16px;
+}
+
+.context-separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 8px;
+}
+
+/* Application Styles */
+
+/* File Manager */
+.file-manager {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.file-toolbar {
+    background: #f5f5f5;
+    padding: 8px 12px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.file-toolbar button {
+    background: #4CAF50;
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.current-path {
+    font-size: 12px;
+    color: #666;
+    flex: 1;
+}
+
+.file-list {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+}
+
+.file-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s ease;
+}
+
+.file-item:hover {
+    background: #e3f2fd;
+}
+
+/* Text Editor */
+.text-editor {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-toolbar {
+    background: #f5f5f5;
+    padding: 8px 12px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    gap: 8px;
+}
+
+.editor-toolbar button {
+    background: #2196F3;
+    border: none;
+    color: white;
+    padding: 6px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.editor-textarea {
+    flex: 1;
+    border: none;
+    padding: 12px;
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    resize: none;
+    outline: none;
+}
+
+/* Calculator */
+.calculator {
+    width: 250px;
+    background: #333;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.calc-display {
+    background: #000;
+    padding: 20px;
+}
+
+.calc-display input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: white;
+    font-size: 24px;
+    text-align: right;
+    outline: none;
+}
+
+.calc-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: #222;
+}
+
+.calc-btn {
+    background: #666;
+    border: none;
+    color: white;
+    padding: 20px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+.calc-btn:hover {
+    background: #777;
+}
+
+.calc-btn:active {
+    background: #555;
+}
+
+.calc-equals {
+    background: #ff9500;
+    grid-row: span 2;
+}
+
+.calc-equals:hover {
+    background: #ffad33;
+}
+
+.calc-zero {
+    grid-column: span 2;
+}
+
+/* Terminal */
+.terminal {
+    height: 100%;
+    background: #000;
+    color: #00ff00;
+    font-family: 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+}
+
+.terminal-output {
+    flex: 1;
+    padding: 12px;
+    overflow-y: auto;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.terminal-input {
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    border-top: 1px solid #333;
+}
+
+.terminal-prompt {
+    color: #00ff00;
+    margin-right: 8px;
+    font-weight: bold;
+}
+
+.terminal-input-field {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: #00ff00;
+    font-family: inherit;
+    font-size: 14px;
+    outline: none;
+}
+
+/* Browser */
+.browser {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.browser-toolbar {
+    background: #f5f5f5;
+    padding: 8px 12px;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.browser-nav {
+    display: flex;
+    gap: 4px;
+}
+
+.nav-btn {
+    background: #666;
+    border: none;
+    color: white;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.nav-btn:disabled {
+    background: #ccc;
+    cursor: not-allowed;
+}
+
+.address-bar {
+    flex: 1;
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.browser-content {
+    flex: 1;
+    background: white;
+    overflow: auto;
+}
+
+.browser-iframe {
+    width: 100%;
+    height: 100%;
+    border: none;
+}
+
+/* Settings */
+.settings {
+    height: 100%;
+    display: flex;
+}
+
+.settings-sidebar {
+    width: 200px;
+    background: #f5f5f5;
+    border-right: 1px solid #ddd;
+    padding: 12px 0;
+}
+
+.settings-category {
+    padding: 12px 16px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+    transition: background 0.2s ease;
+}
+
+.settings-category:hover {
+    background: #e3f2fd;
+}
+
+.settings-category.active {
+    background: #2196F3;
+    color: white;
+}
+
+.settings-content {
+    flex: 1;
+    padding: 20px;
+    overflow-y: auto;
+}
+
+.settings-section {
+    margin-bottom: 24px;
+}
+
+.settings-section h3 {
+    margin-bottom: 12px;
+    color: #333;
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px solid #eee;
+}
+
+.setting-control input,
+.setting-control select {
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+/* About */
+.about {
+    text-align: center;
+    padding: 20px;
+}
+
+.about h2 {
+    color: #333;
+    margin-bottom: 16px;
+}
+
+.about p {
+    margin-bottom: 8px;
+    color: #666;
+}
+
+.about ul {
+    text-align: left;
+    margin-top: 16px;
+    color: #666;
+}
+
+.about li {
+    margin-bottom: 4px;
+}
+
+/* Notifications */
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 8px;
+    z-index: 3000;
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    max-width: 300px;
+}
+
+.notification.show {
+    transform: translateX(0);
+}
+
+/* Loading Screen */
+.loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 5000;
+}
+
+.loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 16px;
+}
+
+.loading-text {
+    color: white;
+    font-size: 14px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+/* Shutdown Screen */
+.shutdown-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.shutdown-content {
+    text-align: center;
+    color: white;
+}
+
+.shutdown-logo {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.shutdown-content h2 {
+    font-size: 1.5rem;
+    margin-bottom: 1rem;
+    font-weight: 300;
+}
+
+.shutdown-content p {
+    opacity: 0.7;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .desktop-icons {
+        grid-template-columns: repeat(auto-fill, 60px);
+        gap: 15px;
+    }
+    
+    .desktop-icon {
+        width: 60px;
+    }
+    
+    .desktop-icon .icon {
+        font-size: 24px;
+    }
+    
+    .icon-label {
+        font-size: 10px;
+    }
+    
+    .start-menu {
+        width: 240px;
+    }
+    
+    .window {
+        min-width: 280px;
+    }
+    
+    .calculator {
+        width: 200px;
+    }
+    
+    .calc-btn {
+        padding: 15px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .taskbar {
+        height: 44px;
+    }
+    
+    .start-button {
+        padding: 6px 12px;
+        font-size: 12px;
+    }
+    
+    .desktop-icons {
+        top: 10px;
+        left: 10px;
+        gap: 10px;
+    }
+    
+    .window {
+        min-width: 250px;
+        border-radius: 8px;
+    }
+    
+    .window-content {
+        padding: 12px;
+    }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Selection */
+::selection {
+    background: rgba(102, 126, 234, 0.3);
+}
+
+/* Focus styles */
+button:focus,
+input:focus,
+textarea:focus,
+select:focus {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+
+.window {
+    animation: fadeIn 0.3s ease;
+}
+
+.start-menu {
+    animation: slideUp 0.2s ease;
+}
+
+/* Utility Classes */
+.hidden {
+    display: none !important;
+}
+
+.visible {
+    display: block !important;
+}
+
+.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-left {
+    text-align: left;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.mb-1 { margin-bottom: 8px; }
+.mb-2 { margin-bottom: 16px; }
+.mb-3 { margin-bottom: 24px; }
+
+.p-1 { padding: 8px; }
+.p-2 { padding: 16px; }
+.p-3 { padding: 24px; }
+
+
+    </style>
 <body>
     <div id="bootScreen" class="boot-screen">
         <div class="boot-content">
@@ -150,11 +1159,871 @@
         <div class="loading-spinner"></div>
         <div class="loading-text">Loading...</div>
     </div>
-
-    <!-- Scripts -->
-    <script src="js/webos.js"></script>
     <script>
-        // Boot sequence
+function newFile() {
+    const editor = document.getElementById('textEditor');
+    const filePath = document.getElementById('currentFilePath');
+    
+    if (editor) {
+        editor.value = '';
+        filePath.textContent = '';
+    }
+}
+
+function saveFile() {
+    const editor = document.getElementById('textEditor');
+    const filePath = document.getElementById('currentFilePath');
+    
+    if (!editor) return;
+    
+    let path = filePath.textContent;
+    if (!path) {
+        path = prompt('Enter file name:');
+        if (!path) return;
+        
+        if (!path.includes('/')) {
+            path = 'Documents/' + path;
+        }
+    }
+    
+    webOS.fileSystem.createFile(path, editor.value);
+    filePath.textContent = path;
+    showNotification('File saved successfully');
+}
+
+function openFile() {
+    const fileName = prompt('Enter file path:');
+    if (!fileName) return;
+    
+    const content = webOS.fileSystem.readFile(fileName);
+    if (content !== null) {
+        const editor = document.getElementById('textEditor');
+        const filePath = document.getElementById('currentFilePath');
+        
+        if (editor) editor.value = content;
+        if (filePath) filePath.textContent = fileName;
+    } else {
+        showNotification('File not found');
+    }
+}
+
+function openCalculator() {
+    const content = `
+        <div class="calculator">
+            <div class="calc-display">
+                <input type="text" id="calcDisplay" value="0" readonly>
+            </div>
+            <div class="calc-buttons">
+                <button class="calc-btn" onclick="clearCalculator()">C</button>
+                <button class="calc-btn" onclick="calcInput('±')">±</button>
+                <button class="calc-btn" onclick="calcInput('%')">%</button>
+                <button class="calc-btn" onclick="calcInput('÷')">÷</button>
+                
+                <button class="calc-btn" onclick="calcInput('7')">7</button>
+                <button class="calc-btn" onclick="calcInput('8')">8</button>
+                <button class="calc-btn" onclick="calcInput('9')">9</button>
+                <button class="calc-btn" onclick="calcInput('×')">×</button>
+                
+                <button class="calc-btn" onclick="calcInput('4')">4</button>
+                <button class="calc-btn" onclick="calcInput('5')">5</button>
+                <button class="calc-btn" onclick="calcInput('6')">6</button>
+                <button class="calc-btn" onclick="calcInput('-')">−</button>
+                
+                <button class="calc-btn" onclick="calcInput('1')">1</button>
+                <button class="calc-btn" onclick="calcInput('2')">2</button>
+                <button class="calc-btn" onclick="calcInput('3')">3</button>
+                <button class="calc-btn" onclick="calcInput('+')">+</button>
+                
+                <button class="calc-btn calc-zero" onclick="calcInput('0')">0</button>
+                <button class="calc-btn" onclick="calcInput('.')">.</button>
+                <button class="calc-btn calc-equals" onclick="calculateResult()">=</button>
+            </div>
+        </div>
+    `;
+    
+    webOS.createWindow('Calculator', content, { width: 250, height: 350, resizable: false });
+    resetCalculator();
+}
+
+function resetCalculator() {
+    webOS.calculator = {
+        display: '0',
+        previousValue: null,
+        operation: null,
+        waitingForOperand: false
+    };
+}
+
+function clearCalculator() {
+    resetCalculator();
+    updateCalcDisplay();
+}
+
+function calcInput(value) {
+    const calc = webOS.calculator;
+    
+    if (['+', '-', '×', '÷'].includes(value)) {
+        if (calc.previousValue === null) {
+            calc.previousValue = parseFloat(calc.display);
+        } else if (calc.operation) {
+            const currentValue = parseFloat(calc.display);
+            const result = performCalculation(calc.previousValue, currentValue, calc.operation);
+            calc.display = String(result);
+            calc.previousValue = result;
+        }
+        
+        calc.waitingForOperand = true;
+        calc.operation = value;
+    } else if (value === '=') {
+        calculateResult();
+    } else if (value === '%') {
+        calc.display = String(parseFloat(calc.display) / 100);
+    } else if (value === '±') {
+        calc.display = String(-parseFloat(calc.display));
+    } else if (value === '.') {
+        if (calc.waitingForOperand) {
+            calc.display = '0.';
+            calc.waitingForOperand = false;
+        } else if (calc.display.indexOf('.') === -1) {
+            calc.display += '.';
+        }
+    } else {
+        if (calc.waitingForOperand) {
+            calc.display = value;
+            calc.waitingForOperand = false;
+        } else {
+            calc.display = calc.display === '0' ? value : calc.display + value;
+        }
+    }
+    
+    updateCalcDisplay();
+}
+
+function calculateResult() {
+    const calc = webOS.calculator;
+    
+    if (calc.previousValue !== null && calc.operation) {
+        const currentValue = parseFloat(calc.display);
+        const result = performCalculation(calc.previousValue, currentValue, calc.operation);
+        calc.display = String(result);
+        calc.previousValue = null;
+        calc.operation = null;
+        calc.waitingForOperand = true;
+        updateCalcDisplay();
+    }
+}
+
+function performCalculation(prev, current, operation) {
+    switch (operation) {
+        case '+': return prev + current;
+        case '-': return prev - current;
+        case '×': return prev * current;
+        case '÷': return current !== 0 ? prev / current : 0;
+        default: return current;
+    }
+}
+
+function updateCalcDisplay() {
+    const display = document.getElementById('calcDisplay');
+    if (display) {
+        display.value = webOS.calculator.display;
+    }
+}
+
+function openTerminal() {
+    const content = `
+        <div class="terminal">
+            <div class="terminal-output" id="terminalOutput">
+                <div>WebOS Terminal v1.0</div>
+                <div>Type 'help' for available commands.</div>
+                <div></div>
+            </div>
+            <div class="terminal-input">
+                <span class="terminal-prompt">user@webos:~$</span>
+                <input type="text" class="terminal-input-field" id="terminalInput" 
+                       onkeypress="handleTerminalInput(event)" autocomplete="off">
+            </div>
+        </div>
+    `;
+    
+    webOS.createWindow('Terminal', content, { width: 600, height: 400 });
+    
+    // Focus the terminal input
+    setTimeout(() => {
+        const input = document.getElementById('terminalInput');
+        if (input) input.focus();
+    }, 100);
+}
+
+function handleTerminalInput(event) {
+    if (event.key === 'Enter') {
+        const input = event.target;
+        const command = input.value.trim();
+        const output = document.getElementById('terminalOutput');
+        
+        // Add command to output
+        const commandLine = document.createElement('div');
+        commandLine.innerHTML = `<span style="color: #00ff00;">user@webos:~$</span> ${command}`;
+        output.appendChild(commandLine);
+        
+        // Process command
+        const result = processTerminalCommand(command);
+        if (result) {
+            const resultDiv = document.createElement('div');
+            resultDiv.innerHTML = result;
+            output.appendChild(resultDiv);
+        }
+        
+        // Clear input and scroll to bottom
+        input.value = '';
+        output.scrollTop = output.scrollHeight;
+    }
+}
+
+function processTerminalCommand(command) {
+    const args = command.split(' ');
+    const cmd = args[0].toLowerCase();
+    
+    switch (cmd) {
+        case 'help':
+            return `Available commands:
+            <br>help - Show this help message
+            <br>ls - List files in current directory
+            <br>pwd - Show current directory
+            <br>cd - Change directory
+            <br>cat - Display file contents
+            <br>echo - Display text
+            <br>clear - Clear terminal
+            <br>date - Show current date and time
+            <br>calc - Open calculator
+            <br>notepad - Open text editor`;
+            
+        case 'ls':
+            const files = webOS.fileSystem.listDirectory();
+            return files.map(f => `${f.type === 'folder' ? '📁' : '📄'} ${f.name}`).join('<br>') || 'No files found';
+            
+        case 'pwd':
+            return webOS.fileSystem.currentPath;
+            
+        case 'cd':
+            if (args[1]) {
+                const newPath = args[1] === '..' ? 
+                    (webOS.fileSystem.currentPath.substring(0, webOS.fileSystem.currentPath.lastIndexOf('/')) || '/') :
+                    args[1];
+                webOS.fileSystem.currentPath = newPath;
+                return `Changed directory to ${newPath}`;
+            }
+            return 'Usage: cd <directory>';
+            
+        case 'cat':
+            if (args[1]) {
+                const content = webOS.fileSystem.readFile(args[1]);
+                return content !== null ? content.replace(/\n/g, '<br>') : 'File not found';
+            }
+            return 'Usage: cat <filename>';
+            
+        case 'echo':
+            return args.slice(1).join(' ');
+            
+        case 'clear':
+            setTimeout(() => {
+                const output = document.getElementById('terminalOutput');
+                if (output) output.innerHTML = '';
+            }, 100);
+            return '';
+            
+        case 'date':
+            return new Date().toString();
+            
+        case 'calc':
+            openCalculator();
+            return 'Opening calculator...';
+            
+        case 'notepad':
+            openTextEditor();
+            return 'Opening text editor...';
+            
+        default:
+            return `Command not found: ${cmd}. Type 'help' for available commands.`;
+    }
+}
+
+function openBrowser() {
+    const content = `
+        <div class="browser">
+            <div class="browser-toolbar">
+                <div class="browser-nav">
+                    <button class="nav-btn" onclick="browserBack()" id="backBtn" disabled>←</button>
+                    <button class="nav-btn" onclick="browserForward()" id="forwardBtn" disabled>→</button>
+                    <button class="nav-btn" onclick="browserRefresh()">⟳</button>
+                </div>
+                <input type="text" class="address-bar" id="addressBar" 
+                       placeholder="Enter URL or search term" 
+                       onkeypress="handleAddressBar(event)"
+                       value="about:blank">
+                <button class="nav-btn" onclick="browserGo()">Go</button>
+            </div>
+            <div class="browser-content">
+                <iframe class="browser-iframe" id="browserFrame" src="about:blank"></iframe>
+            </div>
+        </div>
+    `;
+    
+    webOS.createWindow('Browser', content, { width: 800, height: 600 });
+}
+
+function handleAddressBar(event) {
+    if (event.key === 'Enter') {
+        browserGo();
+    }
+}
+
+function browserGo() {
+    const addressBar = document.getElementById('addressBar');
+    const frame = document.getElementById('browserFrame');
+    
+    if (!addressBar || !frame) return;
+    
+    let url = addressBar.value.trim();
+    
+    if (url === 'about:blank' || url === '') {
+        frame.src = 'about:blank';
+        return;
+    }
+    
+    // Simple URL validation and correction
+    if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('about:')) {
+        if (url.includes('.')) {
+            url = 'https://' + url;
+        } else {
+            url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+        }
+    }
+    
+    try {
+        frame.src = url;
+        addressBar.value = url;
+    } catch (error) {
+        showNotification('Failed to load URL');
+    }
+}
+
+function browserBack() {
+    const frame = document.getElementById('browserFrame');
+    if (frame && frame.contentWindow) {
+        frame.contentWindow.history.back();
+    }
+}
+
+function browserForward() {
+    const frame = document.getElementById('browserFrame');
+    if (frame && frame.contentWindow) {
+        frame.contentWindow.history.forward();
+    }
+}
+
+function browserRefresh() {
+    const frame = document.getElementById('browserFrame');
+    if (frame) {
+        frame.src = frame.src;
+    }
+}
+
+function openSettings() {
+    const content = `
+        <div class="settings">
+            <div class="settings-sidebar">
+                <div class="settings-category active" onclick="showSettingsCategory('general')">General</div>
+                <div class="settings-category" onclick="showSettingsCategory('appearance')">Appearance</div>
+                <div class="settings-category" onclick="showSettingsCategory('system')">System</div>
+                <div class="settings-category" onclick="showSettingsCategory('about')">About</div>
+            </div>
+            <div class="settings-content" id="settingsContent">
+                ${getGeneralSettings()}
+            </div>
+        </div>
+    `;
+    
+    webOS.createWindow('Settings', content, { width: 700, height: 500 });
+}
+
+function showSettingsCategory(category) {
+    // Update sidebar
+    document.querySelectorAll('.settings-category').forEach(cat => {
+        cat.classList.remove('active');
+    });
+    event.target.classList.add('active');
+    
+    // Update content
+    const content = document.getElementById('settingsContent');
+    if (!content) return;
+    
+    switch (category) {
+        case 'general':
+            content.innerHTML = getGeneralSettings();
+            break;
+        case 'appearance':
+            content.innerHTML = getAppearanceSettings();
+            break;
+        case 'system':
+            content.innerHTML = getSystemSettings();
+            break;
+        case 'about':
+            content.innerHTML = getAboutSettings();
+            break;
+    }
+}
+
+function getGeneralSettings() {
+    return `
+        <div class="settings-section">
+            <h3>General Settings</h3>
+            <div class="setting-item">
+                <label>Language</label>
+                <div class="setting-control">
+                    <select>
+                        <option>English</option>
+                        <option>Spanish</option>
+                        <option>French</option>
+                    </select>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Time Zone</label>
+                <div class="setting-control">
+                    <select>
+                        <option>UTC</option>
+                        <option>EST</option>
+                        <option>PST</option>
+                    </select>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Auto-save</label>
+                <div class="setting-control">
+                    <input type="checkbox" checked>
+                </div>
+
+                            <input type="checkbox" checked>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getAppearanceSettings() {
+    return `
+        <div class="settings-section">
+            <h3>Appearance Settings</h3>
+            <div class="setting-item">
+                <label>Theme</label>
+                <div class="setting-control">
+                    <select onchange="changeTheme(this.value)">
+                        <option value="default">Default</option>
+                        <option value="dark">Dark</option>
+                        <option value="light">Light</option>
+                    </select>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Desktop Background</label>
+                <div class="setting-control">
+                    <select onchange="changeBackground(this.value)">
+                        <option value="gradient">Gradient</option>
+                        <option value="solid">Solid Color</option>
+                        <option value="image">Image</option>
+                    </select>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Window Transparency</label>
+                <div class="setting-control">
+                    <input type="range" min="0" max="100" value="95" onchange="changeTransparency(this.value)">
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Font Size</label>
+                <div class="setting-control">
+                    <select onchange="changeFontSize(this.value)">
+                        <option value="small">Small</option>
+                        <option value="medium" selected>Medium</option>
+                        <option value="large">Large</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getSystemSettings() {
+    return `
+        <div class="settings-section">
+            <h3>System Settings</h3>
+            <div class="setting-item">
+                <label>Startup Programs</label>
+                <div class="setting-control">
+                    <button onclick="manageStartupPrograms()">Manage</button>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Memory Usage</label>
+                <div class="setting-control">
+                    <span>${getMemoryUsage()}</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Storage</label>
+                <div class="setting-control">
+                    <span>${getStorageInfo()}</span>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Clear Cache</label>
+                <div class="setting-control">
+                    <button onclick="clearCache()">Clear</button>
+                </div>
+            </div>
+            <div class="setting-item">
+                <label>Reset System</label>
+                <div class="setting-control">
+                    <button onclick="resetSystem()" style="background: #ff4757;">Reset</button>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+function getAboutSettings() {
+    return `
+        <div class="about">
+            <h2>WebOS</h2>
+            <p><strong>Version:</strong> 1.0.0</p>
+            <p><strong>Build:</strong> 2024.01.01</p>
+            <p><strong>Platform:</strong> Web Browser</p>
+            <p><strong>Engine:</strong> JavaScript/HTML5</p>
+            <br>
+            <h3>Features:</h3>
+            <ul>
+                <li>Window Management</li>
+                <li>File System</li>
+                <li>Text Editor</li>
+                <li>Calculator</li>
+                <li>Terminal</li>
+                <li>Web Browser</li>
+                <li>Settings Panel</li>
+            </ul>
+            <br>
+            <p><strong>Developer:</strong> WebOS Team</p>
+            <p><strong>License:</strong> MIT</p>
+        </div>
+    `;
+}
+
+function changeTheme(theme) {
+    const body = document.body;
+    body.className = body.className.replace(/theme-\w+/g, '');
+    if (theme !== 'default') {
+        body.classList.add(`theme-${theme}`);
+    }
+    showNotification(`Theme changed to ${theme}`);
+}
+
+function changeBackground(background) {
+    const desktop = document.querySelector('.desktop');
+    if (!desktop) return;
+    
+    switch (background) {
+        case 'gradient':
+            desktop.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            break;
+        case 'solid':
+            desktop.style.background = '#4a5568';
+            break;
+        case 'image':
+            desktop.style.background = 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%239C92AC" fill-opacity="0.1"%3E%3Ccircle cx="30" cy="30" r="4"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E"), linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
+            break;
+    }
+    showNotification(`Background changed to ${background}`);
+}
+
+function changeTransparency(value) {
+    const windows = document.querySelectorAll('.window');
+    windows.forEach(window => {
+        window.style.opacity = value / 100;
+    });
+    showNotification(`Window transparency set to ${value}%`);
+}
+
+function changeFontSize(size) {
+    const body = document.body;
+    body.className = body.className.replace(/font-\w+/g, '');
+    body.classList.add(`font-${size}`);
+    showNotification(`Font size changed to ${size}`);
+}
+
+function getMemoryUsage() {
+    if (performance.memory) {
+        const used = Math.round(performance.memory.usedJSHeapSize / 1048576);
+        const total = Math.round(performance.memory.totalJSHeapSize / 1048576);
+        return `${used}MB / ${total}MB`;
+    }
+    return 'N/A';
+}
+
+function getStorageInfo() {
+    if (navigator.storage && navigator.storage.estimate) {
+        navigator.storage.estimate().then(estimate => {
+            const used = Math.round(estimate.usage / 1048576);
+            const quota = Math.round(estimate.quota / 1048576);
+            return `${used}MB / ${quota}MB`;
+        });
+    }
+    return 'Calculating...';
+}
+
+function clearCache() {
+    if (confirm('Are you sure you want to clear the cache?')) {
+        localStorage.clear();
+        sessionStorage.clear();
+        showNotification('Cache cleared successfully');
+    }
+}
+
+function resetSystem() {
+    if (confirm('Are you sure you want to reset the system? This will close all windows and clear all data.')) {
+        // Close all windows
+        webOS.windows.forEach((_, windowId) => {
+            webOS.closeWindow(windowId);
+        });
+        
+        // Reset file system
+        webOS.fileSystem = new FileSystem();
+        webOS.initializeFileSystem();
+        
+        // Clear storage
+        localStorage.clear();
+        sessionStorage.clear();
+        
+        showNotification('System reset successfully');
+    }
+}
+
+function manageStartupPrograms() {
+    showNotification('Startup program management not yet implemented');
+}
+
+// Utility Functions
+function showNotification(message, duration = 3000) {
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    notification.textContent = message;
+    
+    document.body.appendChild(notification);
+    
+    // Trigger animation
+    setTimeout(() => notification.classList.add('show'), 100);
+    
+    // Remove notification
+    setTimeout(() => {
+        notification.classList.remove('show');
+        setTimeout(() => notification.remove(), 300);
+    }, duration);
+}
+
+function showContextMenu(x, y, items) {
+    // Remove existing context menu
+    const existingMenu = document.querySelector('.context-menu');
+    if (existingMenu) {
+        existingMenu.remove();
+    }
+    
+    const menu = document.createElement('div');
+    menu.className = 'context-menu';
+    menu.style.left = x + 'px';
+    menu.style.top = y + 'px';
+    menu.style.display = 'block';
+    
+    items.forEach(item => {
+        if (item.separator) {
+            const separator = document.createElement('div');
+            separator.className = 'context-separator';
+            menu.appendChild(separator);
+        } else {
+            const menuItem = document.createElement('div');
+            menuItem.className = 'context-item';
+            menuItem.innerHTML = `<span class="context-icon">${item.icon || ''}</span>${item.text}`;
+            menuItem.onclick = () => {
+                item.action();
+                menu.remove();
+            };
+            menu.appendChild(menuItem);
+        }
+    });
+    
+    document.body.appendChild(menu);
+    
+    // Close menu when clicking outside
+    setTimeout(() => {
+        document.addEventListener('click', function closeMenu() {
+            menu.remove();
+            document.removeEventListener('click', closeMenu);
+        });
+    }, 100);
+}
+
+// Clock and System Tray
+function updateClock() {
+    const clockElement = document.getElementById('clock');
+    if (clockElement) {
+        const now = new Date();
+        const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const date = now.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        
+        clockElement.innerHTML = `
+            <div class="time">${time}</div>
+            <div class="date">${date}</div>
+        `;
+    }
+}
+
+// Start Menu Functions
+function toggleStartMenu() {
+    const startMenu = document.getElementById('startMenu');
+    if (startMenu.style.display === 'block') {
+        startMenu.style.display = 'none';
+    } else {
+        startMenu.style.display = 'block';
+    }
+}
+
+function hideStartMenu() {
+    const startMenu = document.getElementById('startMenu');
+    startMenu.style.display = 'none';
+}
+
+// Boot and Shutdown Functions
+function bootSystem() {
+    const bootScreen = document.getElementById('bootScreen');
+    const progressFill = document.getElementById('progressFill');
+    const bootText = document.getElementById('bootText');
+    
+    const bootSteps = [
+        { text: 'Initializing system...', progress: 20 },
+        { text: 'Loading kernel...', progress: 40 },
+        { text: 'Starting services...', progress: 60 },
+        { text: 'Loading desktop...', progress: 80 },
+        { text: 'Ready!', progress: 100 }
+    ];
+    
+    let currentStep = 0;
+    
+    const bootInterval = setInterval(() => {
+        if (currentStep < bootSteps.length) {
+            const step = bootSteps[currentStep];
+            bootText.textContent = step.text;
+            progressFill.style.width = step.progress + '%';
+            currentStep++;
+        } else {
+            clearInterval(bootInterval);
+            setTimeout(() => {
+                bootScreen.style.display = 'none';
+                document.getElementById('desktop').style.display = 'block';
+                showNotification('Welcome to WebOS!');
+            }, 1000);
+        }
+    }, 800);
+}
+
+function shutdownSystem() {
+    if (confirm('Are you sure you want to shut down?')) {
+        // Close all windows
+        webOS.windows.forEach((_, windowId) => {
+            webOS.closeWindow(windowId);
+        });
+        
+        // Show shutdown screen
+        const shutdownScreen = document.createElement('div');
+        shutdownScreen.className = 'shutdown-screen';
+        shutdownScreen.innerHTML = `
+            <div class="shutdown-content">
+                <div class="shutdown-logo">💻</div>
+                <h2>Shutting down...</h2>
+                <p>It's now safe to close this window</p>
+            </div>
+        `;
+        
+        document.body.appendChild(shutdownScreen);
+        
+        setTimeout(() => {
+            window.close();
+        }, 3000);
+    }
+}
+
+function restartSystem() {
+    if (confirm('Are you sure you want to restart?')) {
+        location.reload();
+    }
+}
+
+// Event Listeners for Desktop
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize WebOS
+    window.webOS = new WebOSCore();
+    
+    // Start the boot sequence
+    bootSystem();
+    
+    // Update clock every second
+    setInterval(updateClock, 1000);
+    updateClock();
+    
+    // Desktop right-click context menu
+    document.getElementById('desktop').addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+        showContextMenu(e.clientX, e.clientY, [
+            { icon: '🔄', text: 'Refresh', action: () => location.reload() },
+            { separator: true },
+            { icon: '📁', text: 'New Folder', action: () => showNotification('New folder created') },
+            { icon: '📄', text: 'New File', action: () => openTextEditor() },
+            { separator: true },
+            { icon: '⚙️', text: 'Settings', action: openSettings },
+            { icon: '💻', text: 'About', action: () => openSettings() }
+        ]);
+    });
+    
+    // Hide start menu when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.start-button') && !e.target.closest('.start-menu')) {
+            hideStartMenu();
+        }
+    });
+    
+    // Hide context menu when clicking
+    document.addEventListener('click', function() {
+        const contextMenu = document.querySelector('.context-menu');
+        if (contextMenu) {
+            contextMenu.remove();
+        }
+    });
+    
+    // Prevent default drag behavior on desktop
+    document.getElementById('desktop').addEventListener('dragover', e => e.preventDefault());
+    document.getElementById('desktop').addEventListener('drop', e => e.preventDefault());
+});
+
+// Export for global access
+window.openFileManager = openFileManager;
+window.openTextEditor = openTextEditor;
+window.openCalculator = openCalculator;
+window.openTerminal = openTerminal;
+window.openBrowser = openBrowser;
+window.openSettings = openSettings;
+window.toggleStartMenu = toggleStartMenu;
+window.shutdownSystem = shutdownSystem;
+window.restartSystem = restartSystem;
+
+        
         window.addEventListener('load', function() {
             startBootSequence();
         });
