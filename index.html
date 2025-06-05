@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebOS - Web-based Operating System</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>💻</text></svg>">
+</head>
+<body>
+    <div id="bootScreen" class="boot-screen">
+        <div class="boot-content">
+            <div class="boot-logo">💻</div>
+            <h1>WebOS</h1>
+            <div class="boot-progress">
+                <div class="progress-bar">
+                    <div id="progressFill" class="progress-fill"></div>
+                </div>
+                <div id="bootText" class="boot-text">Initializing system...</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="desktop" class="desktop" style="display: none;">
+        <!-- Taskbar -->
+        <div class="taskbar">
+            <div class="taskbar-left">
+                <button id="startButton" class="start-button" onclick="toggleStartMenu()">
+                    <span class="start-icon">💻</span>
+                    Start
+                </button>
+                <div id="startMenu" class="start-menu">
+                    <div class="start-menu-header">
+                        <div class="user-info">
+                            <div class="user-avatar">👤</div>
+                            <div class="user-name">User</div>
+                        </div>
+                    </div>
+                    <div class="start-menu-items">
+                        <div class="menu-item" onclick="openFileManager()">
+                            <span class="menu-icon">📁</span>
+                            File Manager
+                        </div>
+                        <div class="menu-item" onclick="openTextEditor()">
+                            <span class="menu-icon">📝</span>
+                            Text Editor
+                        </div>
+                        <div class="menu-item" onclick="openCalculator()">
+                            <span class="menu-icon">🧮</span>
+                            Calculator
+                        </div>
+                        <div class="menu-item" onclick="openTerminal()">
+                            <span class="menu-icon">💻</span>
+                            Terminal
+                        </div>
+                        <div class="menu-item" onclick="openBrowser()">
+                            <span class="menu-icon">🌐</span>
+                            Browser
+                        </div>
+                        <div class="menu-item" onclick="openSettings()">
+                            <span class="menu-icon">⚙️</span>
+                            Settings
+                        </div>
+                        <div class="menu-separator"></div>
+                        <div class="menu-item" onclick="openAbout()">
+                            <span class="menu-icon">ℹ️</span>
+                            About WebOS
+                        </div>
+                        <div class="menu-item" onclick="shutdown()">
+                            <span class="menu-icon">🔌</span>
+                            Shutdown
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="taskbar-center">
+                <div id="taskbarWindows" class="taskbar-windows"></div>
+            </div>
+            
+            <div class="taskbar-right">
+                <div class="system-tray">
+                    <div class="tray-icon" title="Network">📶</div>
+                    <div class="tray-icon" title="Volume">🔊</div>
+                    <div class="tray-icon" title="Battery">🔋</div>
+                </div>
+                <div class="clock" id="clock">
+                    <div class="time" id="time">12:00</div>
+                    <div class="date" id="date">1/1/2024</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Desktop Icons -->
+        <div class="desktop-icons">
+            <div class="desktop-icon" ondblclick="openFileManager()">
+                <div class="icon">📁</div>
+                <div class="icon-label">File Manager</div>
+            </div>
+            <div class="desktop-icon" ondblclick="openTextEditor()">
+                <div class="icon">📝</div>
+                <div class="icon-label">Text Editor</div>
+            </div>
+            <div class="desktop-icon" ondblclick="openCalculator()">
+                <div class="icon">🧮</div>
+                <div class="icon-label">Calculator</div>
+            </div>
+            <div class="desktop-icon" ondblclick="openTerminal()">
+                <div class="icon">💻</div>
+                <div class="icon-label">Terminal</div>
+            </div>
+            <div class="desktop-icon" ondblclick="openBrowser()">
+                <div class="icon">🌐</div>
+                <div class="icon-label">Browser</div>
+            </div>
+            <div class="desktop-icon" ondblclick="openSettings()">
+                <div class="icon">⚙️</div>
+                <div class="icon-label">Settings</div>
+            </div>
+        </div>
+
+        <!-- Context Menu -->
+        <div id="contextMenu" class="context-menu">
+            <div class="context-item" onclick="refreshDesktop()">
+                <span class="context-icon">🔄</span>
+                Refresh
+            </div>
+            <div class="context-separator"></div>
+            <div class="context-item" onclick="createNewFolder()">
+                <span class="context-icon">📁</span>
+                New Folder
+            </div>
+            <div class="context-item" onclick="createNewFile()">
+                <span class="context-icon">📄</span>
+                New File
+            </div>
+            <div class="context-separator"></div>
+            <div class="context-item" onclick="openSettings()">
+                <span class="context-icon">⚙️</span>
+                Properties
+            </div>
+        </div>
+    </div>
+
+    <!-- Window Container -->
+    <div id="windowContainer"></div>
+
+    <!-- Loading Screen -->
+    <div id="loadingScreen" class="loading-screen" style="display: none;">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="js/webos.js"></script>
+    <script>
+        // Boot sequence
+        window.addEventListener('load', function() {
+            startBootSequence();
+        });
+
+        function startBootSequence() {
+            const bootTexts = [
+                'Initializing system...',
+                'Loading kernel modules...',
+                'Starting system services...',
+                'Mounting file systems...',
+                'Loading desktop environment...',
+                'WebOS ready!'
+            ];
+
+            let currentStep = 0;
+            const progressFill = document.getElementById('progressFill');
+            const bootText = document.getElementById('bootText');
+
+            function updateBoot() {
+                if (currentStep < bootTexts.length) {
+                    bootText.textContent = bootTexts[currentStep];
+                    progressFill.style.width = ((currentStep + 1) / bootTexts.length * 100) + '%';
+                    currentStep++;
+                    setTimeout(updateBoot, 800);
+                } else {
+                    setTimeout(() => {
+                        document.getElementById('bootScreen').style.display = 'none';
+                        document.getElementById('desktop').style.display = 'block';
+                        initializeWebOS();
+                    }, 500);
+                }
+            }
+
+            updateBoot();
+        }
+
+        function initializeWebOS() {
+            updateClock();
+            setInterval(updateClock, 1000);
+            
+            // Initialize desktop
+            setupDesktopEvents();
+            
+            console.log('WebOS initialized successfully!');
+        }
+
+        function updateClock() {
+            const now = new Date();
+            const timeElement = document.getElementById('time');
+            const dateElement = document.getElementById('date');
+            
+            const timeString = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const dateString = now.toLocaleDateString();
+            
+            if (timeElement) timeElement.textContent = timeString;
+            if (dateElement) dateElement.textContent = dateString;
+        }
+
+        function setupDesktopEvents() {
+            const desktop = document.getElementById('desktop');
+            
+            // Right-click context menu
+            desktop.addEventListener('contextmenu', function(e) {
+                e.preventDefault();
+                showContextMenu(e.clientX, e.clientY);
+            });
+            
+            // Click to hide context menu and start menu
+            desktop.addEventListener('click', function(e) {
+                if (!e.target.closest('.context-menu')) {
+                    hideContextMenu();
+                }
+                if (!e.target.closest('.start-button') && !e.target.closest('.start-menu')) {
+                    hideStartMenu();
+                }
+            });
+        }
+
+        function showContextMenu(x, y) {
+            const contextMenu = document.getElementById('contextMenu');
+            contextMenu.style.display = 'block';
+            contextMenu.style.left = x + 'px';
+            contextMenu.style.top = y + 'px';
+        }
+
+        function hideContextMenu() {
+            document.getElementById('contextMenu').style.display = 'none';
+        }
+
+        function toggleStartMenu() {
+            const startMenu = document.getElementById('startMenu');
+            startMenu.style.display = startMenu.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function hideStartMenu() {
+            document.getElementById('startMenu').style.display = 'none';
+        }
+
+        function refreshDesktop() {
+            hideContextMenu();
+            showNotification('Desktop refreshed');
+        }
+
+        function createNewFolder() {
+            hideContextMenu();
+            const name = prompt('Enter folder name:');
+            if (name) {
+                showNotification(`Created folder: ${name}`);
+            }
+        }
+
+        function createNewFile() {
+            hideContextMenu();
+            const name = prompt('Enter file name:');
+            if (name) {
+                showNotification(`Created file: ${name}`);
+            }
+        }
+
+        function shutdown() {
+            hideStartMenu();
+            if (confirm('Are you sure you want to shutdown WebOS?')) {
+                document.body.innerHTML = `
+                    <div class="shutdown-screen">
+                        <div class="shutdown-content">
+                            <div class="shutdown-logo">💻</div>
+                            <h2>WebOS is shutting down...</h2>
+                            <p>Thank you for using WebOS!</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function showNotification(message) {
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.textContent = message;
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                notification.classList.add('show');
+            }, 100);
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+                setTimeout(() => {
+                    document.body.removeChild(notification);
+                }, 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
