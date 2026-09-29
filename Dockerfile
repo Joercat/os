@@ -1,3 +1,6 @@
+# Docker/Fly/Hugging Face container setup.
+# Deepnote free/basic projects do not need this Dockerfile; use:
+#   bash scripts/deepnote-desktop.sh
 # FROM ghcr.io/joercat/digpvp:latest 
 FROM lscr.io/linuxserver/webtop:debian-xfce
 
