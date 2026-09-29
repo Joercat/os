@@ -13,6 +13,7 @@ VNC_DEPTH="${VNC_DEPTH:-24}"
 KASMVNC_VERSION="${KASMVNC_VERSION:-1.5.0}"
 KASMVNC_USER="${KASMVNC_USER:-kasm}"
 PASSWORD_FILE="${KASMVNC_PASSWORD_FILE:-$HOME/.vnc/deepnote-kasm-password}"
+RESET_KASMVNC="${RESET_KASMVNC:-true}"
 
 log() {
   printf '\033[1;34m[deepnote-kasm]\033[0m %s\n' "$*"
@@ -61,6 +62,7 @@ install_desktop_packages() {
     xfce4 \
     xfce4-terminal \
     x11-xserver-utils \
+    x11-utils \
     xterm \
     procps \
     psmisc \
@@ -297,41 +299,125 @@ prepare_xstartup() {
   mkdir -p "$HOME/.vnc"
   cat > "$HOME/.vnc/xstartup" <<EOF_INNER
 #!/bin/sh
-# Some notebook/container launchers do not pass DISPLAY into xstartup.
-# Force the KasmVNC display so xfce4-session does not fail with
-# "cannot open display".
+set -eu
+
+# KasmVNC sometimes starts xstartup with a sparse environment in notebook
+# containers. Be explicit so XFCE never sees an empty DISPLAY.
 export DISPLAY=":$VNC_DISPLAY"
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
+export HOME="\${HOME:-$HOME}"
+export USER="\${USER:-${USER:-$(id -un)}}"
+export LOGNAME="\${LOGNAME:-\$USER}"
+export SHELL="\${SHELL:-/bin/bash}"
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:\$HOME/.local/bin"
+export XAUTHORITY="\${XAUTHORITY:-\$HOME/.Xauthority}"
 export XDG_SESSION_TYPE=x11
 export XDG_CURRENT_DESKTOP=XFCE
 export DESKTOP_SESSION=xfce
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
 
-if command -v xrdb >/dev/null 2>&1 && [ -r "\$HOME/.Xresources" ]; then
-  xrdb "\$HOME/.Xresources"
+# Wait briefly until the virtual X display is accepting clients.
+i=0
+while [ "\$i" -lt 75 ]; do
+  if command -v xset >/dev/null 2>&1 && xset -display "\$DISPLAY" q >/dev/null 2>&1; then
+    break
+  fi
+  if command -v xdpyinfo >/dev/null 2>&1 && xdpyinfo -display "\$DISPLAY" >/dev/null 2>&1; then
+    break
+  fi
+  i=\$((i + 1))
+  sleep 0.2
+done
+
+if command -v xset >/dev/null 2>&1 && ! xset -display "\$DISPLAY" q >/dev/null 2>&1; then
+  echo "KasmVNC display \$DISPLAY is not ready; refusing to start XFCE with an empty/broken display." >&2
+  exit 1
 fi
 
-exec dbus-launch --exit-with-session startxfce4
+if command -v xrdb >/dev/null 2>&1 && [ -r "\$HOME/.Xresources" ]; then
+  xrdb -display "\$DISPLAY" "\$HOME/.Xresources" || true
+fi
+
+# Keep XFCE light for Deepnote's free/basic machines.
+if command -v xfconf-query >/dev/null 2>&1; then
+  xfconf-query -c xfwm4 -p /general/use_compositing -s false >/dev/null 2>&1 || true
+fi
+
+# Use xfce4-session directly instead of startxfce4; the wrapper is where the
+# "xfce4-session: cannot open display:" message can happen if DISPLAY is lost.
+exec env -i \
+  HOME="\$HOME" \
+  USER="\$USER" \
+  LOGNAME="\$LOGNAME" \
+  SHELL="\$SHELL" \
+  PATH="\$PATH" \
+  DISPLAY="\$DISPLAY" \
+  XAUTHORITY="\$XAUTHORITY" \
+  XDG_SESSION_TYPE=x11 \
+  XDG_CURRENT_DESKTOP=XFCE \
+  DESKTOP_SESSION=xfce \
+  dbus-launch --exit-with-session xfce4-session
 EOF_INNER
   chmod +x "$HOME/.vnc/xstartup"
 }
 
 stop_previous_session() {
-  log "Stopping any previous KasmVNC session on display :$VNC_DISPLAY and port $PORT."
-  vncserver -kill ":$VNC_DISPLAY" >/dev/null 2>&1 || true
+  log "Resetting old KasmVNC/XFCE sessions and freeing port $PORT."
+
+  local displays display number uid
+  uid="$(id -u)"
+  displays=""
+
+  if command -v vncserver >/dev/null 2>&1; then
+    if [[ "$RESET_KASMVNC" == "true" ]]; then
+      displays="$(vncserver -list 2>/dev/null | grep -oE ':[0-9]+' | sort -u || true)"
+    else
+      displays=":$VNC_DISPLAY"
+    fi
+
+    for display in $displays ":$VNC_DISPLAY"; do
+      [[ -n "$display" ]] || continue
+      log "Stopping VNC display $display if present."
+      vncserver -kill "$display" >/dev/null 2>&1 || true
+    done
+  fi
+
+  if [[ "$RESET_KASMVNC" == "true" ]]; then
+    # KasmVNC's vncserver -list can miss half-started sessions, so also kill
+    # current-user Kasm/XFCE leftovers. This is intentionally scoped to the
+    # current user so it does not disturb Deepnote system services.
+    pkill -u "$uid" -x Xvnc >/dev/null 2>&1 || true
+    pkill -u "$uid" -x Xkasmvnc >/dev/null 2>&1 || true
+    pkill -u "$uid" -x kasmxproxy >/dev/null 2>&1 || true
+    pkill -u "$uid" -f 'xfce4-session|xfwm4|xfce4-panel|xfdesktop|Thunar' >/dev/null 2>&1 || true
+    pkill -u "$uid" -f 'dbus-launch --exit-with-session xfce4-session' >/dev/null 2>&1 || true
+  fi
+
   if command -v fuser >/dev/null 2>&1; then
     fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
   fi
+
+  # Remove stale display locks/logs from previous failed attempts. Do not touch
+  # :0 because notebook platforms may use it internally.
+  for display in $displays ":$VNC_DISPLAY"; do
+    number="${display#:}"
+    [[ "$number" =~ ^[1-9][0-9]*$ ]] || continue
+    rm -f "/tmp/.X${number}-lock" "/tmp/.X11-unix/X${number}" 2>/dev/null || true
+    rm -f "$HOME/.vnc/"*":${number}.log" "$HOME/.vnc/"*":${number}.pid" 2>/dev/null || true
+  done
+
+  sleep 1
 }
 
 start_kasmvnc() {
   log "Starting XFCE over KasmVNC on display :$VNC_DISPLAY and web port $PORT."
   # Do not pass -select-de here. KasmVNC's -select-de rewrites xstartup on
   # some images; we provide a Deepnote-safe xstartup ourselves.
-  vncserver ":$VNC_DISPLAY" \
-    -geometry "$VNC_GEOMETRY" \
-    -depth "$VNC_DEPTH" \
-    -xstartup "$HOME/.vnc/xstartup"
+  env -u DISPLAY -u SESSION_MANAGER -u DBUS_SESSION_BUS_ADDRESS \
+    vncserver ":$VNC_DISPLAY" \
+      -geometry "$VNC_GEOMETRY" \
+      -depth "$VNC_DEPTH" \
+      -xstartup "$HOME/.vnc/xstartup"
 }
 
 print_ready_message() {
@@ -356,12 +442,41 @@ Keep this terminal running. Press Ctrl+C here to stop the desktop.
 EOF_INNER
 }
 
+current_log_file() {
+  ls -t "$HOME/.vnc/"*":${VNC_DISPLAY}.log" 2>/dev/null | head -n 1 || true
+}
+
+wait_for_desktop() {
+  local log_file uid
+  uid="$(id -u)"
+
+  for _ in {1..75}; do
+    if pgrep -u "$uid" -f 'xfce4-session|xfwm4|xfce4-panel' >/dev/null 2>&1; then
+      return 0
+    fi
+
+    log_file="$(current_log_file)"
+    if [[ -n "$log_file" ]] && grep -Eqi 'cannot open display|KasmVNC display .* is not ready|xstartup.*(failed|exited)' "$log_file"; then
+      warn "XFCE did not start cleanly. Recent KasmVNC log follows:"
+      tail -n 120 "$log_file" >&2 || true
+      return 1
+    fi
+
+    sleep 0.4
+  done
+
+  warn "KasmVNC started, but XFCE was not detected after 30 seconds. Recent log follows:"
+  log_file="$(current_log_file)"
+  [[ -n "$log_file" ]] && tail -n 120 "$log_file" >&2 || true
+  return 1
+}
+
 follow_logs_until_stopped() {
-  local log_glob tail_pid
+  local log_file tail_pid
 
   # KasmVNC writes under ~/.vnc. Give the log file a moment to appear.
-  sleep 2
-  log_glob=("$HOME/.vnc"/*.log)
+  sleep 1
+  log_file="$(current_log_file)"
 
   cleanup() {
     log "Stopping KasmVNC."
@@ -370,8 +485,8 @@ follow_logs_until_stopped() {
   }
   trap cleanup INT TERM EXIT
 
-  if compgen -G "$HOME/.vnc/*.log" >/dev/null; then
-    tail -n 80 -F "$HOME/.vnc"/*.log &
+  if [[ -n "$log_file" ]]; then
+    tail -n 80 -F "$log_file" &
     tail_pid=$!
     wait "$tail_pid"
   else
@@ -394,6 +509,10 @@ main() {
   prepare_xstartup
   stop_previous_session
   start_kasmvnc
+  if ! wait_for_desktop; then
+    stop_previous_session
+    fail "KasmVNC started, but XFCE failed to attach to its display."
+  fi
   print_ready_message
   follow_logs_until_stopped
 }
