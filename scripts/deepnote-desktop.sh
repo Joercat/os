@@ -427,8 +427,13 @@ start_kasmvnc() {
 }
 
 print_ready_message() {
-  local password
+  local password deepnote_url_line
   password="$(tr -d '\r\n' < "$PASSWORD_FILE")"
+  deepnote_url_line=""
+
+  if [[ -n "${DEEPNOTE_PROJECT_ID:-}" ]]; then
+    deepnote_url_line="  URL: https://${DEEPNOTE_PROJECT_ID}.deepnoteproject.com"
+  fi
 
   cat <<EOF_INNER
 
@@ -437,13 +442,13 @@ KasmVNC desktop is ready on port $PORT.
 Deepnote login for the Kasm page:
   Username: $KASMVNC_USER
   Password: $password
-
+${deepnote_url_line}
 Next steps in Deepnote:
   1. Make sure incoming connections are enabled for the workspace.
   2. In this project, open Settings -> Machine -> More options next to Start machine.
   3. Toggle on Incoming connections and open the URL Deepnote shows you.
 
-Keep this terminal running. Press Ctrl+C here to stop the desktop.
+Keep this notebook cell/terminal running. Stop it when you want to stop the desktop.
 
 EOF_INNER
 }

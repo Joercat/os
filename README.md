@@ -7,18 +7,41 @@ The original container setup remains in `Dockerfile`; it is based on `lscr.io/li
 ## Run on Deepnote for free
 
 1. Create a free Deepnote project using the default Python environment, or use your public Docker image environment if you already selected one.
-2. Open **Terminal** in the Deepnote sidebar.
-3. Paste this whole block into the Deepnote Terminal. It removes any old `os` folder that may have cloned the wrong branch, then clones this Arena branch specifically:
+2. Use either a **notebook block** or the **Terminal**.
 
-   ```bash
-   cd ~/work 2>/dev/null || cd ~
-   rm -rf os
-   git clone --branch arena/01a0eb07-os --single-branch https://github.com/Joercat/os.git os
-   cd os
-   bash scripts/deepnote-desktop.sh
-   ```
+### Option A: Notebook block, no Terminal needed
 
-4. Enable incoming connections in Deepnote:
+You can open `Deepnote_Kasm_Launcher.ipynb` and run its code cell, or create/open any notebook in Deepnote, add a **Code** block, paste this whole cell, then run it. The cell will keep running while the desktop is on.
+
+```bash
+%%bash
+set -Eeuo pipefail
+cd ~/work 2>/dev/null || cd ~
+if [ -d os ]; then
+  bash os/scripts/deepnote-stop.sh || true
+fi
+rm -rf os
+git clone --branch arena/01a0eb07-os --single-branch https://github.com/Joercat/os.git os
+cd os
+bash scripts/deepnote-desktop.sh
+```
+
+### Option B: Terminal
+
+Open **Terminal** in the Deepnote sidebar and paste this block. It removes any old `os` folder that may have cloned the wrong branch, then clones this Arena branch specifically:
+
+```bash
+cd ~/work 2>/dev/null || cd ~
+if [ -d os ]; then
+  bash os/scripts/deepnote-stop.sh || true
+fi
+rm -rf os
+git clone --branch arena/01a0eb07-os --single-branch https://github.com/Joercat/os.git os
+cd os
+bash scripts/deepnote-desktop.sh
+```
+
+3. Enable incoming connections in Deepnote:
 
    **Workspace setting first**
    - Go back to the Deepnote home/workspace view.
@@ -33,9 +56,9 @@ The original container setup remains in `Dockerfile`; it is based on `lscr.io/li
    - Turn on **Incoming connections**.
    - Open the URL Deepnote shows you.
 
-5. Log in to the Kasm page using the username and password printed by the script.
+4. Log in to the Kasm page using the username and password printed by the script. If the output shows a `https://...deepnoteproject.com` URL, use that after enabling incoming connections.
 
-Keep the terminal running while you use the desktop. To stop it from another terminal:
+Keep the notebook cell/terminal running while you use the desktop. To stop it from another notebook block or terminal:
 
 ```bash
 cd os
