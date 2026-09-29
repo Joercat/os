@@ -274,15 +274,6 @@ user_session:
   concurrent_connections_prompt_timeout: 0
   idle_timeout: never
 
-encoding:
-  max_frame_rate: 20
-  rect_encoding_mode:
-    min_quality: 5
-    max_quality: 7
-  video_encoding_mode:
-    jpeg_quality: 65
-    webp_quality: 65
-
 server:
   advanced:
     kasm_password_file: $HOME/.kasmpasswd
@@ -455,8 +446,7 @@ start_kasmvnc() {
     vncserver ":$VNC_DISPLAY" \
       -geometry "$VNC_GEOMETRY" \
       -depth "$VNC_DEPTH" \
-      -noxstartup \
-      -ac
+      -noxstartup
 
   log "Starting XFCE manually on KasmVNC display :$VNC_DISPLAY."
   : > "$XFCE_LOG_FILE"
@@ -512,12 +502,35 @@ print_recent_logs() {
   fi
 }
 
-wait_for_desktop() {
+desktop_process_is_running() {
   local uid
   uid="$(id -u)"
 
-  for _ in {1..75}; do
-    if pgrep -u "$uid" -f 'xfce4-session|xfwm4|xfce4-panel' >/dev/null 2>&1; then
+  # Use exact process names. A fuzzy pgrep can match this launcher script or
+  # stale log text and incorrectly declare success.
+  pgrep -u "$uid" -x xfce4-session >/dev/null 2>&1 || \
+    pgrep -u "$uid" -x xfwm4 >/dev/null 2>&1 || \
+    pgrep -u "$uid" -x xfce4-panel >/dev/null 2>&1 || \
+    pgrep -u "$uid" -x xfdesktop >/dev/null 2>&1
+}
+
+kasm_log_has_fatal_error() {
+  local log_file
+  log_file="$(current_log_file)"
+  [[ -n "$log_file" ]] || return 1
+
+  grep -Eqi 'Fatal server error|Unrecognized option|\(EE\)' "$log_file"
+}
+
+wait_for_desktop() {
+  for _ in {1..100}; do
+    if kasm_log_has_fatal_error; then
+      warn "KasmVNC reported a fatal error. Recent logs follow:"
+      print_recent_logs
+      return 1
+    fi
+
+    if desktop_process_is_running; then
       return 0
     fi
 
@@ -527,7 +540,7 @@ wait_for_desktop() {
     sleep 0.4
   done
 
-  warn "KasmVNC started, but XFCE was not detected after 30 seconds. Recent logs follow:"
+  warn "KasmVNC started, but XFCE was not detected after 40 seconds. Recent logs follow:"
   print_recent_logs
   return 1
 }
