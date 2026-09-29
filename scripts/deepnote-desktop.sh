@@ -286,6 +286,7 @@ encoding:
 server:
   advanced:
     kasm_password_file: $HOME/.kasmpasswd
+    x_authority_file: $HOME/.Xauthority
   auto_shutdown:
     no_user_session_timeout: never
     active_user_session_timeout: never
@@ -317,22 +318,38 @@ export DESKTOP_SESSION=xfce
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 
-# Wait briefly until the virtual X display is accepting clients.
+display_is_ready() {
+  if command -v xset >/dev/null 2>&1 && xset -display "\$1" q >/dev/null 2>&1; then
+    return 0
+  fi
+  if command -v xdpyinfo >/dev/null 2>&1 && xdpyinfo -display "\$1" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+# Wait briefly until the virtual X display is accepting clients. KasmVNC can
+# expose the X display as either a unix socket (:N) or TCP-style display,
+# depending on the image/build, so try several forms.
 i=0
-while [ "\$i" -lt 75 ]; do
-  if command -v xset >/dev/null 2>&1 && xset -display "\$DISPLAY" q >/dev/null 2>&1; then
-    break
-  fi
-  if command -v xdpyinfo >/dev/null 2>&1 && xdpyinfo -display "\$DISPLAY" >/dev/null 2>&1; then
-    break
-  fi
+while [ "\$i" -lt 100 ]; do
+  for candidate in ":$VNC_DISPLAY" ":$VNC_DISPLAY.0" "localhost:$VNC_DISPLAY" "127.0.0.1:$VNC_DISPLAY" "\$(hostname):$VNC_DISPLAY"; do
+    if display_is_ready "\$candidate"; then
+      export DISPLAY="\$candidate"
+      break 2
+    fi
+  done
   i=\$((i + 1))
   sleep 0.2
 done
 
-if command -v xset >/dev/null 2>&1 && ! xset -display "\$DISPLAY" q >/dev/null 2>&1; then
-  echo "KasmVNC display \$DISPLAY is not ready; refusing to start XFCE with an empty/broken display." >&2
-  exit 1
+if ! display_is_ready "\$DISPLAY"; then
+  echo "Warning: could not verify KasmVNC X display \$DISPLAY before launching XFCE." >&2
+  echo "Continuing anyway so the real XFCE error, if any, is captured below." >&2
+  echo "Debug: /tmp/.X11-unix contents:" >&2
+  ls -la /tmp/.X11-unix >&2 2>/dev/null || true
+  echo "Debug: Xvnc processes:" >&2
+  ps -ef | grep -E '[X]vnc|[X]kasmvnc' >&2 || true
 fi
 
 if command -v xrdb >/dev/null 2>&1 && [ -r "\$HOME/.Xresources" ]; then
@@ -346,7 +363,10 @@ fi
 
 # Use xfce4-session directly instead of startxfce4; the wrapper is where the
 # "xfce4-session: cannot open display:" message can happen if DISPLAY is lost.
-exec env -i \
+# If the full session manager exits, fall back to the core XFCE components so
+# the browser desktop can still come up.
+set +e
+env -i \
   HOME="\$HOME" \
   USER="\$USER" \
   LOGNAME="\$LOGNAME" \
@@ -358,6 +378,22 @@ exec env -i \
   XDG_CURRENT_DESKTOP=XFCE \
   DESKTOP_SESSION=xfce \
   dbus-launch --exit-with-session xfce4-session
+
+status="\$?"
+echo "xfce4-session exited with status \$status; trying fallback XFCE components." >&2
+
+env -i \
+  HOME="\$HOME" \
+  USER="\$USER" \
+  LOGNAME="\$LOGNAME" \
+  SHELL="\$SHELL" \
+  PATH="\$PATH" \
+  DISPLAY="\$DISPLAY" \
+  XAUTHORITY="\$XAUTHORITY" \
+  XDG_SESSION_TYPE=x11 \
+  XDG_CURRENT_DESKTOP=XFCE \
+  DESKTOP_SESSION=xfce \
+  dbus-launch --exit-with-session sh -c 'xfsettingsd >/tmp/xfsettingsd.log 2>&1 & xfwm4 --replace >/tmp/xfwm4.log 2>&1 & xfce4-panel >/tmp/xfce4-panel.log 2>&1 & xfdesktop >/tmp/xfdesktop.log 2>&1 & xterm >/tmp/xterm.log 2>&1 & wait'
 EOF_INNER
   chmod +x "$HOME/.vnc/xstartup"
 }
@@ -419,7 +455,8 @@ start_kasmvnc() {
     vncserver ":$VNC_DISPLAY" \
       -geometry "$VNC_GEOMETRY" \
       -depth "$VNC_DEPTH" \
-      -noxstartup
+      -noxstartup \
+      -ac
 
   log "Starting XFCE manually on KasmVNC display :$VNC_DISPLAY."
   : > "$XFCE_LOG_FILE"
@@ -454,7 +491,10 @@ EOF_INNER
 }
 
 current_log_file() {
-  ls -t "$HOME/.vnc/"*":${VNC_DISPLAY}.log" 2>/dev/null | head -n 1 || true
+  # Exclude our manual XFCE log; this should be the KasmVNC/Xvnc log.
+  find "$HOME/.vnc" -maxdepth 1 -type f -name "*:${VNC_DISPLAY}.log" ! -name "xfce-manual:${VNC_DISPLAY}.log" -printf '%T@ %p\n' 2>/dev/null \
+    | sort -nr \
+    | awk 'NR==1 {sub(/^[^ ]+ /, ""); print}'
 }
 
 print_recent_logs() {
@@ -473,7 +513,7 @@ print_recent_logs() {
 }
 
 wait_for_desktop() {
-  local log_file uid
+  local uid
   uid="$(id -u)"
 
   for _ in {1..75}; do
@@ -481,14 +521,9 @@ wait_for_desktop() {
       return 0
     fi
 
-    log_file="$(current_log_file)"
-    if { [[ -n "$log_file" ]] && grep -Eqi 'cannot open display|KasmVNC display .* is not ready|xstartup.*(failed|exited)' "$log_file"; } || \
-       { [[ -f "$XFCE_LOG_FILE" ]] && grep -Eqi 'cannot open display|KasmVNC display .* is not ready|xfce4-session.*failed' "$XFCE_LOG_FILE"; }; then
-      warn "XFCE did not start cleanly. Recent logs follow:"
-      print_recent_logs
-      return 1
-    fi
-
+    # Do not fail immediately on an XFCE error line: the startup script can
+    # fall back to core XFCE components after xfce4-session exits. Give that
+    # fallback time to create xfwm4/xfce4-panel first.
     sleep 0.4
   done
 
