@@ -295,16 +295,20 @@ EOF_INNER
 
 prepare_xstartup() {
   mkdir -p "$HOME/.vnc"
-  cat > "$HOME/.vnc/xstartup" <<'EOF_INNER'
+  cat > "$HOME/.vnc/xstartup" <<EOF_INNER
 #!/bin/sh
+# Some notebook/container launchers do not pass DISPLAY into xstartup.
+# Force the KasmVNC display so xfce4-session does not fail with
+# "cannot open display".
+export DISPLAY=":$VNC_DISPLAY"
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
 export XDG_SESSION_TYPE=x11
 export XDG_CURRENT_DESKTOP=XFCE
 export DESKTOP_SESSION=xfce
 
-if command -v xrdb >/dev/null 2>&1 && [ -r "$HOME/.Xresources" ]; then
-  xrdb "$HOME/.Xresources"
+if command -v xrdb >/dev/null 2>&1 && [ -r "\$HOME/.Xresources" ]; then
+  xrdb "\$HOME/.Xresources"
 fi
 
 exec dbus-launch --exit-with-session startxfce4
@@ -322,8 +326,9 @@ stop_previous_session() {
 
 start_kasmvnc() {
   log "Starting XFCE over KasmVNC on display :$VNC_DISPLAY and web port $PORT."
+  # Do not pass -select-de here. KasmVNC's -select-de rewrites xstartup on
+  # some images; we provide a Deepnote-safe xstartup ourselves.
   vncserver ":$VNC_DISPLAY" \
-    -select-de xfce \
     -geometry "$VNC_GEOMETRY" \
     -depth "$VNC_DEPTH" \
     -xstartup "$HOME/.vnc/xstartup"

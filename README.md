@@ -80,6 +80,7 @@ Supported variables:
 - Runtime apt installs can take a few minutes and may need to be repeated on a fresh machine.
 - Avoid using this for sensitive browsing. Deepnote incoming connections can expose the desktop URL publicly if shared.
 - If the browser package is unavailable in the default apt repositories, the desktop still starts; install a browser manually or use another tool inside the XFCE terminal.
+- If you see `xfce4-session: cannot open display`, make sure you are on the latest branch version and rerun the setup block above. The launcher forces the KasmVNC display in its startup script.
 - If you cannot find **Incoming connections**, make sure it is enabled at the workspace level first. You may need to be the workspace admin.
 
 ## Existing Docker/Fly-style deployment
