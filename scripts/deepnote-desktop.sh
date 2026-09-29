@@ -1,29 +1,29 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Runtime setup for Deepnote's free/basic machines.
-# Deepnote's free tier cannot use this repository's Dockerfile as a custom
-# environment, so this script installs and starts a lightweight XFCE + noVNC
-# desktop directly inside the running Deepnote machine.
+# Runtime setup for Deepnote's free/basic machines using KasmVNC.
+# This does NOT use TigerVNC/noVNC. It either uses KasmVNC already present in
+# the current image (for example linuxserver/webtop-based images), or installs
+# the official KasmVNC .deb package for the running distro.
 
 PORT="${PORT:-${DEEPNOTE_PORT:-8080}}"
 VNC_DISPLAY="${VNC_DISPLAY:-1}"
 VNC_GEOMETRY="${VNC_GEOMETRY:-1280x720}"
 VNC_DEPTH="${VNC_DEPTH:-24}"
-VNC_PORT=$((5900 + VNC_DISPLAY))
-PASSWORD_FILE="${VNC_PASSWORD_FILE:-$HOME/.vnc/deepnote-password}"
-NOVNC_WEBROOT="${NOVNC_WEBROOT:-/tmp/deepnote-novnc-web}"
+KASMVNC_VERSION="${KASMVNC_VERSION:-1.5.0}"
+KASMVNC_USER="${KASMVNC_USER:-kasm}"
+PASSWORD_FILE="${KASMVNC_PASSWORD_FILE:-$HOME/.vnc/deepnote-kasm-password}"
 
 log() {
-  printf '\033[1;34m[deepnote-desktop]\033[0m %s\n' "$*"
+  printf '\033[1;34m[deepnote-kasm]\033[0m %s\n' "$*"
 }
 
 warn() {
-  printf '\033[1;33m[deepnote-desktop warning]\033[0m %s\n' "$*" >&2
+  printf '\033[1;33m[deepnote-kasm warning]\033[0m %s\n' "$*" >&2
 }
 
 fail() {
-  printf '\033[1;31m[deepnote-desktop error]\033[0m %s\n' "$*" >&2
+  printf '\033[1;31m[deepnote-kasm error]\033[0m %s\n' "$*" >&2
   exit 1
 }
 
@@ -37,16 +37,18 @@ run_as_root() {
   fi
 }
 
-have_desktop_stack() {
-  (command -v vncserver >/dev/null 2>&1 || command -v tigervncserver >/dev/null 2>&1) && \
-  (command -v vncpasswd >/dev/null 2>&1 || command -v tigervncpasswd >/dev/null 2>&1) && \
-  command -v websockify >/dev/null 2>&1 && \
-  command -v startxfce4 >/dev/null 2>&1 && \
-  [[ -d /usr/share/novnc || -d /usr/share/novnc/app ]]
+have_kasmvnc() {
+  command -v vncserver >/dev/null 2>&1 || return 1
+  command -v vncpasswd >/dev/null 2>&1 || return 1
+  command -v Xvnc >/dev/null 2>&1 || return 1
+
+  local version_output
+  version_output="$(Xvnc -version 2>&1 || true)"
+  grep -qi 'KasmVNC' <<< "$version_output"
 }
 
-install_desktop_stack() {
-  log "Installing XFCE, TigerVNC, noVNC, and helper tools. This can take several minutes the first time."
+install_desktop_packages() {
+  log "Installing XFCE and helper tools. This can take several minutes the first time."
   export DEBIAN_FRONTEND=noninteractive
 
   run_as_root apt-get update
@@ -60,10 +62,6 @@ install_desktop_stack() {
     xfce4-terminal \
     x11-xserver-utils \
     xterm \
-    tigervnc-standalone-server \
-    tigervnc-common \
-    novnc \
-    websockify \
     procps \
     psmisc \
     htop \
@@ -72,9 +70,75 @@ install_desktop_stack() {
     zip \
     unzip \
     cpulimit
+}
 
-  run_as_root apt-get clean
-  run_as_root rm -rf /var/lib/apt/lists/*
+detect_kasmvnc_codename() {
+  local distro_id codename
+  distro_id=""
+  codename=""
+
+  if [[ -r /etc/os-release ]]; then
+    # shellcheck disable=SC1091
+    source /etc/os-release
+    distro_id="${ID:-}"
+    codename="${VERSION_CODENAME:-${UBUNTU_CODENAME:-}}"
+  fi
+
+  case "$codename" in
+    bookworm|bullseye|trixie|focal|jammy|noble|kali-rolling)
+      printf '%s\n' "$codename"
+      return
+      ;;
+  esac
+
+  case "$distro_id" in
+    debian)
+      printf '%s\n' "bookworm"
+      ;;
+    ubuntu)
+      printf '%s\n' "jammy"
+      ;;
+    kali)
+      printf '%s\n' "kali-rolling"
+      ;;
+    *)
+      warn "Could not detect a KasmVNC package for this distro; trying Ubuntu Jammy package."
+      printf '%s\n' "jammy"
+      ;;
+  esac
+}
+
+install_kasmvnc() {
+  if have_kasmvnc; then
+    log "KasmVNC is already installed in this environment."
+    return
+  fi
+
+  log "Installing official KasmVNC ${KASMVNC_VERSION}."
+  export DEBIAN_FRONTEND=noninteractive
+
+  # If an older attempt installed TigerVNC, remove it so KasmVNC owns vncserver/Xvnc.
+  run_as_root apt-get purge -y tigervnc-standalone-server tigervnc-common tigervnc-tools tightvncserver vnc4server >/dev/null 2>&1 || true
+  run_as_root apt-get autoremove -y >/dev/null 2>&1 || true
+
+  local codename deb_url deb_path
+  codename="$(detect_kasmvnc_codename)"
+  deb_url="https://github.com/kasmtech/KasmVNC/releases/download/v${KASMVNC_VERSION}/kasmvncserver_${codename}_${KASMVNC_VERSION}_amd64.deb"
+  deb_path="/tmp/kasmvncserver_${codename}_${KASMVNC_VERSION}_amd64.deb"
+
+  log "Downloading ${deb_url}"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fL "$deb_url" -o "$deb_path"
+  else
+    wget -O "$deb_path" "$deb_url"
+  fi
+
+  run_as_root apt-get install -y "$deb_path"
+  rm -f "$deb_path"
+
+  if ! have_kasmvnc; then
+    fail "KasmVNC did not install correctly."
+  fi
 }
 
 browser_cmd() {
@@ -99,8 +163,6 @@ install_browser_if_possible() {
   for browser_pkg in firefox-esr chromium firefox chromium-browser; do
     if run_as_root apt-get install -y --no-install-recommends "$browser_pkg"; then
       log "Installed browser package: $browser_pkg"
-      run_as_root apt-get clean || true
-      run_as_root rm -rf /var/lib/apt/lists/* || true
       return
     fi
   done
@@ -117,7 +179,7 @@ prepare_browser_launcher() {
   icon_name="$browser_name"
 
   mkdir -p "$HOME/.local/bin" "$HOME/.local/share/applications"
-  cat > "$HOME/.local/bin/deepnote-browser" <<EOF
+  cat > "$HOME/.local/bin/deepnote-browser" <<EOF_INNER
 #!/usr/bin/env bash
 set -e
 BROWSER_CMD="$detected_browser"
@@ -133,90 +195,107 @@ if [[ "\$(id -u)" -eq 0 && "\$BROWSER_NAME" == chromium* ]]; then
 else
   exec "\$BROWSER_CMD" "\$@"
 fi
-EOF
+EOF_INNER
   chmod +x "$HOME/.local/bin/deepnote-browser"
 
-  cat > "$HOME/.local/share/applications/deepnote-browser.desktop" <<EOF
+  cat > "$HOME/.local/share/applications/deepnote-browser.desktop" <<EOF_INNER
 [Desktop Entry]
 Name=Web Browser (Deepnote)
 Exec=$HOME/.local/bin/deepnote-browser %u
 Icon=$icon_name
 Type=Application
 Categories=Network;WebBrowser;
-EOF
-}
-
-find_novnc_root() {
-  if [[ -d /usr/share/novnc ]]; then
-    printf '%s\n' /usr/share/novnc
-  elif [[ -d /usr/share/novnc/app ]]; then
-    printf '%s\n' /usr/share/novnc/app
-  else
-    fail "noVNC web files were not found under /usr/share/novnc."
-  fi
+EOF_INNER
 }
 
 generate_password() {
-  python3 - <<'PY'
-import secrets
-import string
-alphabet = string.ascii_letters + string.digits
-# VNC auth effectively uses up to 8 characters, so keep the displayed password
-# at 8 chars to avoid confusion.
-print(''.join(secrets.choice(alphabet) for _ in range(8)))
-PY
+  # 14 hex chars, simple to copy/paste, no dependency on Python or OpenSSL.
+  od -An -N7 -tx1 /dev/urandom | tr -d ' \n'
+  printf '\n'
 }
 
-vncserver_cmd() {
-  if command -v vncserver >/dev/null 2>&1; then
-    command -v vncserver
-  elif command -v tigervncserver >/dev/null 2>&1; then
-    command -v tigervncserver
-  else
-    fail "TigerVNC server command was not found after installation."
-  fi
-}
-
-vncpasswd_cmd() {
-  if command -v vncpasswd >/dev/null 2>&1; then
-    command -v vncpasswd
-  elif command -v tigervncpasswd >/dev/null 2>&1; then
-    command -v tigervncpasswd
-  else
-    fail "TigerVNC password command was not found after installation."
-  fi
-}
-
-prepare_vnc_password() {
+prepare_kasm_password() {
   mkdir -p "$HOME/.vnc"
   chmod 700 "$HOME/.vnc"
 
-  if [[ -n "${VNC_PASSWORD:-}" ]]; then
-    printf '%s\n' "$VNC_PASSWORD" > "$PASSWORD_FILE"
+  if [[ -n "${KASMVNC_PASSWORD:-}" ]]; then
+    printf '%s\n' "$KASMVNC_PASSWORD" > "$PASSWORD_FILE"
     chmod 600 "$PASSWORD_FILE"
   elif [[ ! -s "$PASSWORD_FILE" ]]; then
     generate_password > "$PASSWORD_FILE"
     chmod 600 "$PASSWORD_FILE"
   fi
 
-  local password passwd_cmd
+  local password
   password="$(tr -d '\r\n' < "$PASSWORD_FILE")"
-  [[ -n "$password" ]] || fail "VNC password is empty."
-  if (( ${#password} > 8 )); then
-    warn "VNC auth only uses the first 8 password characters; truncating the saved password to avoid login confusion."
-    password="${password:0:8}"
-    printf '%s\n' "$password" > "$PASSWORD_FILE"
-    chmod 600 "$PASSWORD_FILE"
-  fi
-  passwd_cmd="$(vncpasswd_cmd)"
+  [[ ${#password} -ge 6 ]] || fail "KasmVNC password must be at least 6 characters."
 
-  printf '%s\n' "$password" | "$passwd_cmd" -f > "$HOME/.vnc/passwd"
-  chmod 600 "$HOME/.vnc/passwd"
+  # KasmVNC's vncpasswd stores HTTP Basic Auth users in ~/.kasmpasswd.
+  printf '%s\n%s\n' "$password" "$password" | vncpasswd -u "$KASMVNC_USER" -ow >/dev/null
+  chmod 600 "$HOME/.kasmpasswd"
+}
+
+split_geometry() {
+  local width height
+  width="${VNC_GEOMETRY%x*}"
+  height="${VNC_GEOMETRY#*x}"
+  [[ "$width" =~ ^[0-9]+$ && "$height" =~ ^[0-9]+$ ]] || fail "VNC_GEOMETRY must look like 1280x720."
+  printf '%s %s\n' "$width" "$height"
+}
+
+prepare_kasm_config() {
+  local width height
+  read -r width height < <(split_geometry)
+
+  mkdir -p "$HOME/.vnc"
+  cat > "$HOME/.vnc/kasmvnc.yaml" <<EOF_INNER
+desktop:
+  resolution:
+    width: $width
+    height: $height
+  allow_resize: true
+  pixel_depth: $VNC_DEPTH
+
+network:
+  protocol: http
+  interface: 0.0.0.0
+  websocket_port: $PORT
+  use_ipv4: true
+  use_ipv6: false
+  ssl:
+    require_ssl: false
+
+user_session:
+  new_session_disconnects_existing_exclusive_session: false
+  concurrent_connections_prompt: false
+  concurrent_connections_prompt_timeout: 0
+  idle_timeout: never
+
+encoding:
+  max_frame_rate: 20
+  rect_encoding_mode:
+    min_quality: 5
+    max_quality: 7
+  video_encoding_mode:
+    jpeg_quality: 65
+    webp_quality: 65
+
+server:
+  advanced:
+    kasm_password_file: $HOME/.kasmpasswd
+  auto_shutdown:
+    no_user_session_timeout: never
+    active_user_session_timeout: never
+    inactive_user_session_timeout: never
+
+command_line:
+  prompt: false
+EOF_INNER
 }
 
 prepare_xstartup() {
   mkdir -p "$HOME/.vnc"
-  cat > "$HOME/.vnc/xstartup" <<'EOF'
+  cat > "$HOME/.vnc/xstartup" <<'EOF_INNER'
 #!/bin/sh
 unset SESSION_MANAGER
 unset DBUS_SESSION_BUS_ADDRESS
@@ -229,97 +308,89 @@ if command -v xrdb >/dev/null 2>&1 && [ -r "$HOME/.Xresources" ]; then
 fi
 
 exec dbus-launch --exit-with-session startxfce4
-EOF
+EOF_INNER
   chmod +x "$HOME/.vnc/xstartup"
 }
 
-prepare_novnc_webroot() {
-  local novnc_source
-  novnc_source="$(find_novnc_root)"
-
-  rm -rf "$NOVNC_WEBROOT"
-  mkdir -p "$NOVNC_WEBROOT"
-  cp -a "$novnc_source"/. "$NOVNC_WEBROOT"/
-
-  cat > "$NOVNC_WEBROOT/index.html" <<'EOF'
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="refresh" content="0; url=vnc.html?autoconnect=true&resize=remote&path=websockify">
-    <title>Deepnote Desktop</title>
-  </head>
-  <body>
-    <p>Opening noVNC desktop… If nothing happens, <a href="vnc.html?autoconnect=true&resize=remote&path=websockify">click here</a>.</p>
-  </body>
-</html>
-EOF
-}
-
 stop_previous_session() {
-  local server_cmd
-  server_cmd="$(vncserver_cmd)"
-
-  log "Stopping any previous VNC/noVNC session on display :$VNC_DISPLAY and port $PORT."
-  "$server_cmd" -kill ":$VNC_DISPLAY" >/dev/null 2>&1 || true
+  log "Stopping any previous KasmVNC session on display :$VNC_DISPLAY and port $PORT."
+  vncserver -kill ":$VNC_DISPLAY" >/dev/null 2>&1 || true
   if command -v fuser >/dev/null 2>&1; then
     fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true
   fi
 }
 
-start_vnc() {
-  local server_cmd
-  server_cmd="$(vncserver_cmd)"
-
-  log "Starting XFCE over VNC on display :$VNC_DISPLAY ($VNC_GEOMETRY, depth $VNC_DEPTH)."
-  "$server_cmd" ":$VNC_DISPLAY" \
+start_kasmvnc() {
+  log "Starting XFCE over KasmVNC on display :$VNC_DISPLAY and web port $PORT."
+  vncserver ":$VNC_DISPLAY" \
+    -select-de xfce \
     -geometry "$VNC_GEOMETRY" \
     -depth "$VNC_DEPTH" \
-    -xstartup "$HOME/.vnc/xstartup" \
-    -localhost no \
-    -SecurityTypes VncAuth
+    -xstartup "$HOME/.vnc/xstartup"
 }
 
-start_novnc() {
+print_ready_message() {
   local password
   password="$(tr -d '\r\n' < "$PASSWORD_FILE")"
 
-  cat <<EOF
+  cat <<EOF_INNER
 
-Deepnote desktop is ready to serve on port $PORT.
+KasmVNC desktop is ready on port $PORT.
+
+Deepnote login for the Kasm page:
+  Username: $KASMVNC_USER
+  Password: $password
 
 Next steps in Deepnote:
-  1. In the right sidebar, open Environment and enable "Allow incoming connections".
-  2. Open the project's incoming-connections URL.
-  3. Use this VNC password when prompted: $password
+  1. Make sure incoming connections are enabled for the workspace.
+  2. In this project, open Settings -> Machine -> More options next to Start machine.
+  3. Toggle on Incoming connections and open the URL Deepnote shows you.
 
 Keep this terminal running. Press Ctrl+C here to stop the desktop.
 
-EOF
+EOF_INNER
+}
 
-  log "Starting noVNC on 0.0.0.0:$PORT -> localhost:$VNC_PORT"
-  exec websockify --web="$NOVNC_WEBROOT" --heartbeat=30 "0.0.0.0:$PORT" "localhost:$VNC_PORT"
+follow_logs_until_stopped() {
+  local log_glob tail_pid
+
+  # KasmVNC writes under ~/.vnc. Give the log file a moment to appear.
+  sleep 2
+  log_glob=("$HOME/.vnc"/*.log)
+
+  cleanup() {
+    log "Stopping KasmVNC."
+    vncserver -kill ":$VNC_DISPLAY" >/dev/null 2>&1 || true
+    [[ -n "${tail_pid:-}" ]] && kill "$tail_pid" >/dev/null 2>&1 || true
+  }
+  trap cleanup INT TERM EXIT
+
+  if compgen -G "$HOME/.vnc/*.log" >/dev/null; then
+    tail -n 80 -F "$HOME/.vnc"/*.log &
+    tail_pid=$!
+    wait "$tail_pid"
+  else
+    log "No KasmVNC log file found yet. Desktop is still running; press Ctrl+C to stop."
+    while true; do sleep 3600; done
+  fi
 }
 
 main() {
   if [[ "$PORT" != "8080" ]]; then
-    warn "Deepnote incoming connections expose port 8080. You set PORT=$PORT; make sure you are forwarding 8080 to $PORT or set PORT=8080."
+    warn "Deepnote incoming connections expose port 8080. You set PORT=$PORT; keep PORT=8080 unless you know you have a forwarder."
   fi
 
-  if ! have_desktop_stack; then
-    install_desktop_stack
-  else
-    log "Desktop stack is already installed."
-  fi
-
+  install_desktop_packages
+  install_kasmvnc
   install_browser_if_possible
   prepare_browser_launcher
-  prepare_vnc_password
+  prepare_kasm_password
+  prepare_kasm_config
   prepare_xstartup
-  prepare_novnc_webroot
   stop_previous_session
-  start_vnc
-  start_novnc
+  start_kasmvnc
+  print_ready_message
+  follow_logs_until_stopped
 }
 
 main "$@"
