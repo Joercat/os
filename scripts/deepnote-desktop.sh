@@ -14,6 +14,7 @@ KASMVNC_VERSION="${KASMVNC_VERSION:-1.5.0}"
 KASMVNC_USER="${KASMVNC_USER:-kasm}"
 PASSWORD_FILE="${KASMVNC_PASSWORD_FILE:-$HOME/.vnc/deepnote-kasm-password}"
 RESET_KASMVNC="${RESET_KASMVNC:-true}"
+KASMVNC_DETACH="${KASMVNC_DETACH:-false}"
 XFCE_LOG_FILE="$HOME/.vnc/xfce-manual:${VNC_DISPLAY}.log"
 
 log() {
@@ -475,7 +476,13 @@ Next steps in Deepnote:
   2. In this project, open Settings -> Machine -> More options next to Start machine.
   3. Toggle on Incoming connections and open the URL Deepnote shows you.
 
-Keep this notebook cell/terminal running. Stop it when you want to stop the desktop.
+If this was started in detached notebook mode, the cell can finish and the
+KasmVNC desktop should keep running in the background. To stop it, run:
+  cd ~/work/os 2>/dev/null || cd ~/os
+  bash scripts/deepnote-stop.sh
+
+If this was started in terminal/watch mode, keep this process running and press
+Ctrl+C when you want to stop the desktop.
 
 EOF_INNER
 }
@@ -596,6 +603,13 @@ main() {
     fail "KasmVNC started, but XFCE failed to attach to its display."
   fi
   print_ready_message
+
+  if [[ "$KASMVNC_DETACH" == "true" ]]; then
+    log "Detached mode is enabled; leaving KasmVNC/XFCE running in the background and ending this cell."
+    log "Run scripts/deepnote-stop.sh later to stop it."
+    return 0
+  fi
+
   follow_logs_until_stopped
 }
 

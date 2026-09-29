@@ -11,7 +11,7 @@ The original container setup remains in `Dockerfile`; it is based on `lscr.io/li
 
 ### Option A: Notebook block, no Terminal needed
 
-You can open `Deepnote_Kasm_Launcher.ipynb` and run its code cell, or create/open any notebook in Deepnote, add a **Code** block, paste this whole cell, then run it. The cell will keep running while the desktop is on.
+You can open `Deepnote_Kasm_Launcher.ipynb` and run its start cell, or create/open any notebook in Deepnote, add a **Code** block, paste this whole cell, then run it. This uses detached mode, so the cell can finish while the desktop keeps running in the background.
 
 ```bash
 %%bash
@@ -23,7 +23,7 @@ fi
 rm -rf os
 git clone --branch arena/01a0eb07-os --single-branch https://github.com/Joercat/os.git os
 cd os
-bash scripts/deepnote-desktop.sh
+KASMVNC_DETACH=true bash scripts/deepnote-desktop.sh
 ```
 
 ### Option B: Terminal
@@ -58,10 +58,12 @@ bash scripts/deepnote-desktop.sh
 
 4. Log in to the Kasm page using the username and password printed by the script. If the output shows a `https://...deepnoteproject.com` URL, use that after enabling incoming connections.
 
-Keep the notebook cell/terminal running while you use the desktop. To stop it from another notebook block or terminal:
+If you used the notebook block, the cell can finish and the desktop should keep running. If you used the terminal block, keep the terminal process running while you use the desktop.
+
+To stop it from another notebook block or terminal:
 
 ```bash
-cd os
+cd ~/work/os 2>/dev/null || cd ~/os
 bash scripts/deepnote-stop.sh
 ```
 
@@ -97,6 +99,7 @@ Supported variables:
 | `KASMVNC_PASSWORD` | generated | Password for the KasmVNC login page. If omitted, one is generated and saved in `~/.vnc/deepnote-kasm-password`. |
 | `KASMVNC_VERSION` | `1.5.0` | Official KasmVNC release to install if KasmVNC is not already present. |
 | `RESET_KASMVNC` | `true` | When `true`, the launcher cleans all stale current-user Kasm/XFCE sessions before starting. |
+| `KASMVNC_DETACH` | `false` | Set to `true` for notebook cells so the cell can finish while KasmVNC keeps running in the background. |
 
 ## Notes and limitations
 
