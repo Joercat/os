@@ -6,18 +6,12 @@ This repo still contains the original Docker/Fly setup (`Dockerfile` + `fly.toml
 
 1. Create a free Deepnote project using the default Python environment.
 2. Open **Terminal** in the Deepnote sidebar.
-3. Clone and run this repo:
+3. Paste this whole block into the Deepnote Terminal. It removes any old `os` folder that may have cloned the wrong branch, then clones this Arena branch specifically:
 
    ```bash
-   git clone https://github.com/Joercat/os.git
-   cd os
-   bash scripts/deepnote-desktop.sh
-   ```
-
-   If you are testing an unmerged branch, clone that branch instead:
-
-   ```bash
-   git clone -b <branch-name> https://github.com/Joercat/os.git
+   cd ~/work 2>/dev/null || cd ~
+   rm -rf os
+   git clone --branch arena/01a0eb07-os --single-branch https://github.com/Joercat/os.git os
    cd os
    bash scripts/deepnote-desktop.sh
    ```
