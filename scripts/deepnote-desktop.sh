@@ -14,6 +14,7 @@ KASMVNC_VERSION="${KASMVNC_VERSION:-1.5.0}"
 KASMVNC_USER="${KASMVNC_USER:-kasm}"
 PASSWORD_FILE="${KASMVNC_PASSWORD_FILE:-$HOME/.vnc/deepnote-kasm-password}"
 RESET_KASMVNC="${RESET_KASMVNC:-true}"
+XFCE_LOG_FILE="$HOME/.vnc/xfce-manual:${VNC_DISPLAY}.log"
 
 log() {
   printf '\033[1;34m[deepnote-kasm]\033[0m %s\n' "$*"
@@ -403,21 +404,26 @@ stop_previous_session() {
     number="${display#:}"
     [[ "$number" =~ ^[1-9][0-9]*$ ]] || continue
     rm -f "/tmp/.X${number}-lock" "/tmp/.X11-unix/X${number}" 2>/dev/null || true
-    rm -f "$HOME/.vnc/"*":${number}.log" "$HOME/.vnc/"*":${number}.pid" 2>/dev/null || true
+    rm -f "$HOME/.vnc/"*":${number}.log" "$HOME/.vnc/"*":${number}.pid" "$HOME/.vnc/xfce-manual:${number}.log" 2>/dev/null || true
   done
 
   sleep 1
 }
 
 start_kasmvnc() {
-  log "Starting XFCE over KasmVNC on display :$VNC_DISPLAY and web port $PORT."
-  # Do not pass -select-de here. KasmVNC's -select-de rewrites xstartup on
-  # some images; we provide a Deepnote-safe xstartup ourselves.
+  log "Starting KasmVNC display :$VNC_DISPLAY on web port $PORT."
+  # Start only the KasmVNC X/web server here. We launch XFCE ourselves below
+  # with DISPLAY forced. That avoids KasmVNC/vncserver startup wrappers losing
+  # DISPLAY and producing: "xfce4-session: cannot open display:".
   env -u DISPLAY -u SESSION_MANAGER -u DBUS_SESSION_BUS_ADDRESS \
     vncserver ":$VNC_DISPLAY" \
       -geometry "$VNC_GEOMETRY" \
       -depth "$VNC_DEPTH" \
-      -xstartup "$HOME/.vnc/xstartup"
+      -noxstartup
+
+  log "Starting XFCE manually on KasmVNC display :$VNC_DISPLAY."
+  : > "$XFCE_LOG_FILE"
+  nohup "$HOME/.vnc/xstartup" >> "$XFCE_LOG_FILE" 2>&1 &
 }
 
 print_ready_message() {
@@ -446,6 +452,21 @@ current_log_file() {
   ls -t "$HOME/.vnc/"*":${VNC_DISPLAY}.log" 2>/dev/null | head -n 1 || true
 }
 
+print_recent_logs() {
+  local log_file
+  log_file="$(current_log_file)"
+
+  if [[ -n "$log_file" ]]; then
+    printf '\n--- KasmVNC log: %s ---\n' "$log_file" >&2
+    tail -n 120 "$log_file" >&2 || true
+  fi
+
+  if [[ -f "$XFCE_LOG_FILE" ]]; then
+    printf '\n--- XFCE startup log: %s ---\n' "$XFCE_LOG_FILE" >&2
+    tail -n 120 "$XFCE_LOG_FILE" >&2 || true
+  fi
+}
+
 wait_for_desktop() {
   local log_file uid
   uid="$(id -u)"
@@ -456,18 +477,18 @@ wait_for_desktop() {
     fi
 
     log_file="$(current_log_file)"
-    if [[ -n "$log_file" ]] && grep -Eqi 'cannot open display|KasmVNC display .* is not ready|xstartup.*(failed|exited)' "$log_file"; then
-      warn "XFCE did not start cleanly. Recent KasmVNC log follows:"
-      tail -n 120 "$log_file" >&2 || true
+    if { [[ -n "$log_file" ]] && grep -Eqi 'cannot open display|KasmVNC display .* is not ready|xstartup.*(failed|exited)' "$log_file"; } || \
+       { [[ -f "$XFCE_LOG_FILE" ]] && grep -Eqi 'cannot open display|KasmVNC display .* is not ready|xfce4-session.*failed' "$XFCE_LOG_FILE"; }; then
+      warn "XFCE did not start cleanly. Recent logs follow:"
+      print_recent_logs
       return 1
     fi
 
     sleep 0.4
   done
 
-  warn "KasmVNC started, but XFCE was not detected after 30 seconds. Recent log follows:"
-  log_file="$(current_log_file)"
-  [[ -n "$log_file" ]] && tail -n 120 "$log_file" >&2 || true
+  warn "KasmVNC started, but XFCE was not detected after 30 seconds. Recent logs follow:"
+  print_recent_logs
   return 1
 }
 
@@ -485,8 +506,16 @@ follow_logs_until_stopped() {
   }
   trap cleanup INT TERM EXIT
 
-  if [[ -n "$log_file" ]]; then
+  if [[ -n "$log_file" && -f "$XFCE_LOG_FILE" ]]; then
+    tail -n 80 -F "$log_file" "$XFCE_LOG_FILE" &
+    tail_pid=$!
+    wait "$tail_pid"
+  elif [[ -n "$log_file" ]]; then
     tail -n 80 -F "$log_file" &
+    tail_pid=$!
+    wait "$tail_pid"
+  elif [[ -f "$XFCE_LOG_FILE" ]]; then
+    tail -n 80 -F "$XFCE_LOG_FILE" &
     tail_pid=$!
     wait "$tail_pid"
   else

@@ -28,7 +28,7 @@ for display in $displays ":$VNC_DISPLAY"; do
   number="${display#:}"
   [[ "$number" =~ ^[1-9][0-9]*$ ]] || continue
   rm -f "/tmp/.X${number}-lock" "/tmp/.X11-unix/X${number}" 2>/dev/null || true
-  rm -f "$HOME/.vnc/"*":${number}.log" "$HOME/.vnc/"*":${number}.pid" 2>/dev/null || true
+  rm -f "$HOME/.vnc/"*":${number}.log" "$HOME/.vnc/"*":${number}.pid" "$HOME/.vnc/xfce-manual:${number}.log" 2>/dev/null || true
 done
 
 echo "Stopped all current-user KasmVNC/XFCE sessions and freed web port $PORT if they were running."

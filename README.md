@@ -82,7 +82,7 @@ Supported variables:
 - Avoid using this for sensitive browsing. Deepnote incoming connections can expose the desktop URL publicly if shared.
 - If the browser package is unavailable in the default apt repositories, the desktop still starts; install a browser manually or use another tool inside the XFCE terminal.
 - Each launch resets old current-user KasmVNC/XFCE sessions, clears stale display locks/logs for non-zero displays, and frees port `8080` before starting.
-- If you see `xfce4-session: cannot open display`, make sure you are on the latest branch version and rerun the setup block above. The launcher forces the KasmVNC display in its startup script and uses `xfce4-session` directly instead of the `startxfce4` wrapper.
+- If you see `xfce4-session: cannot open display`, make sure you are on the latest branch version and rerun the setup block above. The launcher starts KasmVNC with `-noxstartup`, then launches XFCE manually with `DISPLAY` forced and uses `xfce4-session` directly instead of the `startxfce4` wrapper.
 - If you cannot find **Incoming connections**, make sure it is enabled at the workspace level first. You may need to be the workspace admin.
 
 ## Existing Docker/Fly-style deployment
