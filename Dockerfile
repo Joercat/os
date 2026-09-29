@@ -75,19 +75,17 @@ RUN echo '#!/bin/bash' > /config/custom-cont-init.d/cpu-limit-wrappers.sh && \
     echo 'echo "export PATH=/config/bin:\$PATH" >> /config/.bashrc' >> /config/custom-cont-init.d/cpu-limit-wrappers.sh && \
     chmod +x /config/custom-cont-init.d/cpu-limit-wrappers.sh
 
-# Create a systemd-like CPU limit for all processes
+# Create a systemd-like CPU limit for all processes (runs in foreground)
 RUN echo '#!/bin/bash' > /config/custom-cont-init.d/global-cpu-monitor.sh && \
     echo '# Monitor and limit CPU usage globally' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
-    echo 'while true; do' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
-    echo '    # Find processes using more than 90% CPU and limit them' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
-    echo '    for pid in $(ps aux | awk '"'"'{if($3 > 90.0) print $2}'"'"'); do' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
-    echo '        if ! pgrep -f "cpulimit.*$pid" > /dev/null; then' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
-    echo '            cpulimit -p $pid -l 80 -b' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
+    echo 'exec bash -c "while true; do' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
+    echo '    for pid in \$(ps aux | awk '"'"'{if(\$3 > 90.0) print \$2}'"'"'); do' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
+    echo '        if ! pgrep -f \"cpulimit.*\$pid\" > /dev/null; then' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
+    echo '            cpulimit -p \$pid -l 80 -b' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
     echo '        fi' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
     echo '    done' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
     echo '    sleep 5' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
-    echo 'done &' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
+    echo 'done"' >> /config/custom-cont-init.d/global-cpu-monitor.sh && \
     chmod +x /config/custom-cont-init.d/global-cpu-monitor.sh
 
 EXPOSE 7860
-
